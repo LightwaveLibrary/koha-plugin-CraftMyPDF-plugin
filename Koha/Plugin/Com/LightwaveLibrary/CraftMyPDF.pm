@@ -4,6 +4,7 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 use JSON qw(encode_json decode_json);
 use CGI;
+use C4::Auth qw(get_session get_template_and_user);
 
 our $VERSION = "1.0";
 our $metadata = {
@@ -29,13 +30,22 @@ sub configure {
     my ( $self ) = @_;
     my $cgi = $self->{'cgi'};
     unless ( $cgi->param('save') ) {
-        my $template = $self->get_template({ file => 'configure.tt' });
-        my $config = $self->retrieve_data('config') || '[]';
+        my ( $template, $loggedinuser, $cookie, $flags ) = get_template_and_user({
+            template_name   => "plugins/plugins-home.tt",
+            query           => $cgi,
+            type            => "intranet",
+            authnotrequired => 0,
+            debug           => 1,
+        });
+        my $config_json = $self->retrieve_data('config') || '[]';
+        my $configs = eval { decode_json($config_json) } || [];
+        $template = $self->get_template({ file => 'configure.tt' });
         $template->param(
-            api_key => $self->retrieve_data('api_key') || '',
-            config  => $config,
+            api_key    => $self->retrieve_data('api_key') || '',
+            configs    => $configs,
+            csrf_token => C4::Auth::get_session($cgi->cookie('CGISESSID'))->param('csrf_token'),
         );
-        print $cgi->header(-charset => 'utf-8');
+        print $cgi->header(-type => 'text/html', -charset => 'utf-8', -cookie => $cookie);
         print $template->output();
     } else {
         my $api_key = $cgi->param('api_key') || '';
