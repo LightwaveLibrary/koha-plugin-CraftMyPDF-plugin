@@ -80,6 +80,20 @@ sub intranet_js {
     my ( $self ) = @_;
     return <<'END_JS';
 <script type="text/javascript">
+function tableToCSV(table) {
+    var rows = table.find('tr').toArray();
+    var csv = [];
+    rows.forEach(function(row) {
+        var cols = $(row).find('th, td').toArray();
+        var rowData = cols.map(function(col) {
+            var text = $(col).text().trim();
+            return '"' + text.replace(/"/g, '""') + '"';
+        });
+        csv.push(rowData.join(','));
+    });
+    return csv.join('\n');
+}
+
 $(document).ready(function() {
     if ($("#report-results").length && /guided_reports.pl/.test(window.location.href)) {
         var report_id = new URLSearchParams(window.location.search).get('id');
@@ -89,7 +103,7 @@ $(document).ready(function() {
                     text: 'Request PDF via CraftMyPDF',
                     class: 'btn btn-primary',
                     click: function() {
-                        var csv = $("#report-results").find("table").table2CSV({ delivery: 'value' });
+                        var csv = tableToCSV($("#report-results").find("table"));
                         $.ajax({
                             url: data.webhook,
                             type: 'POST',
