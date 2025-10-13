@@ -1,100 +1,125 @@
 package Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF;
 
 use Modern::Perl;
-
-## Required for all Koha plugins
 use base qw(Koha::Plugins::Base);
+use JSON qw(encode_json decode_json);
+use CGI;
 
-use C4::Auth;
-use C4::Context;
-use Koha::DateUtils qw(dt_from_string);
-use Koha::Schema;
-
-use Module::Metadata;
-use Mojo::JSON qw(decode_json to_json);
-
-## Plugin version
-our $VERSION = "{VERSION}";
-our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
-
+our $VERSION = "1.0";
 our $metadata = {
-    name            => 'CraftMyPDF Plugin',
+    name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
-    description     => 'Send Koha reports to CraftMyPDF via Make.com webhooks.',
+    description     => 'Integrates Koha guided reports with CraftMyPDF via Make.com webhooks for PDF generation and emailing.',
     date_authored   => '2025-10-12',
-    date_updated    => '2025-10-12',
-    minimum_version => '18',
-    maximum_version => undef,
+    date_updated    => '2025-10-13',
+    minimum_version => '18.0000000',
     version         => $VERSION,
 };
 
 sub new {
     my ( $class, $args ) = @_;
-
-    $args->{'metadata'} = $metadata;
-    $args->{'metadata'}->{'class'} = $class;
-
+    $args->{metadata} = $metadata;
+    $args->{metadata}->{class} = $class;
     my $self = $class->SUPER::new($args);
-
-    # Handle initial install / versioning
-    my $installed        = $self->retrieve_data('__INSTALLED__');
-    my $database_version = $self->retrieve_data('__INSTALLED_VERSION__');
-    my $plugin_version   = $self->get_metadata->{version};
-    if ( $installed && !$database_version ) {
-        $self->upgrade();
-        $self->store_data( { '__INSTALLED_VERSION__' => $plugin_version } );
-    }
-
+    $self->store_data({ '__INSTALLED__' => 1, '__INSTALLED_VERSION__' => $VERSION }) unless $self->retrieve_data('__INSTALLED__');
     return $self;
 }
 
-sub intranet_js {
-    my ($self) = @_;
-    return q~
-        <script>
-        $(document).ready(function(){
-            // Only show "Request PDF via CraftMyPDF" if report ID matches configured IDs
-            let configuredReports = [ /* dynamically populated via plugin */ ];
-
-            // Insert button into the report download section
-            if (configuredReports.includes(reportId)) {
-                $('#download_options').append(
-                    `<button id="craftmypdf_request" class="button">Request PDF via CraftMyPDF</button>`
-                );
-
-                $('#craftmypdf_request').on('click', function(){
-                    let reportData = JSON.parse($('#report_json_data').text());
-                    let webhookUrl = getWebhookUrl(reportId); // function from plugin config
-
-                    fetch(webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(reportData)
-                    }).then(resp => {
-                        alert('Request sent, and report will be sent to ' + getEmailForReport(reportId) + ' shortly.');
-                    }).catch(err => {
-                        console.error(err);
-                        alert('Error sending report.');
-                    });
-                });
-            }
+sub configure {
+    my ( $self ) = @_;
+    my $cgi = $self->{'cgi'};
+    unless ( $cgi->param('save') ) {
+        my $template = $self->get_template({ file => 'Koha/Plugin/Com/LightwaveLibrary/CraftMyPDF/configure.tt' });
+        my $config = $self->retrieve_data('config') || '[]';
+        $template->param(
+            api_key => $self->retrieve_data('api_key') || '',
+            config  => $config,
+        );
+        print $cgi->header(-charset => 'utf-8');
+        print $template->output();
+    } else {
+        my $api_key = $cgi->param('api_key') || '';
+        my @report_ids = $cgi->multi_param('report_id[]');
+        my @webhook_urls = $cgi->multi_param('webhook_url[]');
+        my @emails = $cgi->multi_param('email[]');
+        my @cc_emails = $cgi->multi_param('cc_email[]');
+        my @expirations = $cgi->multi_param('pdf_expire[]');
+        my @configs;
+        for my $i (0 .. $#report_ids) {
+            next unless $report_ids[$i] && $webhook_urls[$i] && $emails[$i];
+            push @configs, {
+                report_id => $report_ids[$i],
+                webhook => $webhook_urls[$i],
+                primary_email => $emails[$i],
+                cc_email => $cc_emails[$i] || '',
+                expiration => $expirations[$i] || 15,
+            };
+        }
+        my $config_json = encode_json(\@configs);
+        $self->store_data({
+            api_key => $api_key,
+            config  => $config_json,
+            '__INSTALLED__' => 1,
+            '__INSTALLED_VERSION__' => $VERSION,
         });
-        </script>
-    ~;
+        print $cgi->redirect('/cgi-bin/koha/plugins/run.pl?class=Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF&method=configure');
+    }
 }
 
-sub upgrade {
-    my ($self, $args) = @_;
-    return 1;
+sub intranet_js {
+    my ( $self ) = @_;
+    return q|
+$(document).ready(function() {
+    if ($("#report-results").length && /guided_reports.pl/.test(window.location.href)) {
+        var report_id = new URLSearchParams(window.location.search).get('id');
+        $.getJSON('/plugin/Koha/Plugin/Com/LightwaveLibrary/CraftMyPDF/get_config.pl?id=' + report_id, function(data) {
+            if (data && data.webhook && data.primary_email) {
+                var button = $('<button>', {
+                    text: 'Request PDF via CraftMyPDF',
+                    class: 'btn btn-primary',
+                    click: function() {
+                        var csv = $("#report-results").find("table").table2CSV({ delivery: 'value' });
+                        $.ajax({
+                            url: data.webhook,
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                report_id: report_id,
+                                csv_data: csv,
+                                primary_email: data.primary_email,
+                                cc_email: data.cc_email || '',
+                                expiration: data.expiration || 7
+                            }),
+                            success: function() {
+                                alert('Request sent, and report will be sent to ' + data.primary_email + ' shortly.');
+                            },
+                            error: function() {
+                                alert('Error sending request to webhook.');
+                            }
+                        });
+                    }
+                });
+                $("#download_options").length ? $("#download_options").append(button) : $("#report-results").prepend(button);
+            }
+        });
+    }
+});
+    |;
 }
 
 sub install {
-    my ($self, $args) = @_;
+    my ( $self ) = @_;
+    $self->store_data({ '__INSTALLED__' => 1, '__INSTALLED_VERSION__' => $VERSION });
+    return 1;
+}
+
+sub upgrade {
+    my ( $self ) = @_;
     return 1;
 }
 
 sub uninstall {
-    my ($self, $args) = @_;
+    my ( $self ) = @_;
     return 1;
 }
 
