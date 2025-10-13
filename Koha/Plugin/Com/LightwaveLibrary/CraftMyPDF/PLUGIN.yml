@@ -1,9 +1,0 @@
-name: CraftMyPDF Plugin
-author: Rudy Hinojosa
-date_authored: 2025-10-12
-date_updated: 2025-10-12
-minimum_version: {MINIMUM_VERSION}
-maximum_version:
-version: {VERSION}
-description: This plugin implements webhooks to make.com for use with the craftmypdf scenario!
-module: Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF
