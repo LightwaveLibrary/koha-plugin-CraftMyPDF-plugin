@@ -1,4 +1,5 @@
 [% USE Koha %]
+[% INCLUDE 'js-common.inc' %]
 [% PROCESS 'i18n.inc' %]
 <!DOCTYPE html>
 <html>
