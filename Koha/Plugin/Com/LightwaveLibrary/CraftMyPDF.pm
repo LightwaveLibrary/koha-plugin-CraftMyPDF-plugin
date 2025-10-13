@@ -69,6 +69,7 @@ sub configure {
 sub intranet_js {
     my ( $self ) = @_;
     return <<'END_JS';
+<script type="text/javascript">
 $(document).ready(function() {
     if ($("#report-results").length && /guided_reports.pl/.test(window.location.href)) {
         var report_id = new URLSearchParams(window.location.search).get('id');
@@ -104,6 +105,7 @@ $(document).ready(function() {
         });
     }
 });
+</script>
 END_JS
 }
 
