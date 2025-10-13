@@ -29,7 +29,7 @@ sub configure {
     my ( $self ) = @_;
     my $cgi = $self->{'cgi'};
     unless ( $cgi->param('save') ) {
-        my $template = $self->get_template({ file => 'Koha/Plugin/Com/LightwaveLibrary/CraftMyPDF/configure.tt' });
+        my $template = $self->get_template({ file => 'configure.tt' });
         my $config = $self->retrieve_data('config') || '[]';
         $template->param(
             api_key => $self->retrieve_data('api_key') || '',
@@ -68,7 +68,7 @@ sub configure {
 
 sub intranet_js {
     my ( $self ) = @_;
-    return q|
+    return <<'END_JS';
 $(document).ready(function() {
     if ($("#report-results").length && /guided_reports.pl/.test(window.location.href)) {
         var report_id = new URLSearchParams(window.location.search).get('id');
@@ -84,11 +84,11 @@ $(document).ready(function() {
                             type: 'POST',
                             contentType: 'application/json',
                             data: JSON.stringify({
-                                report_id: report_id,
-                                csv_data: csv,
-                                primary_email: data.primary_email,
-                                cc_email: data.cc_email || '',
-                                expiration: data.expiration || 7
+                                "report_id": report_id,
+                                "csv_data": csv,
+                                "primary_email": data.primary_email,
+                                "cc_email": data.cc_email || '',
+                                "expiration": data.expiration || 7
                             }),
                             success: function() {
                                 alert('Request sent, and report will be sent to ' + data.primary_email + ' shortly.');
@@ -104,7 +104,7 @@ $(document).ready(function() {
         });
     }
 });
-    |;
+END_JS
 }
 
 sub install {
