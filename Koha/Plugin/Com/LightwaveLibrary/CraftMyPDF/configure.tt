@@ -22,6 +22,7 @@
         <input type="hidden" name="class" value="Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF">
         <input type="hidden" name="method" value="configure">
         <input type="hidden" name="save" value="1">
+        <input type="hidden" name="csrf_token" value="[% csrf_token | html %]">
         <div class="form-group">
             <label for="api_key">CraftMyPDF API Key (Optional):</label>
             <input type="text" name="api_key" id="api_key" value="[% api_key | html %]">
