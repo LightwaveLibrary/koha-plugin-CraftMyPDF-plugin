@@ -1,0 +1,76 @@
+[% USE raw %]
+[% USE HtmlTags %]
+[% USE Koha %]
+[% USE Asset %]
+[% USE KohaDates %]
+[% PROCESS 'i18n.inc' %]
+[% SET footerjs = 1 %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>[% FILTER collapse %]
+    [% t("Item Messages Configuration") | html %] &rsaquo;
+    [% t("Koha") | html %]
+[% END %]</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body id="plugins_item_message" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% PROCESS 'about-team.inc' %]
+
+[% WRAPPER 'sub-header.inc' %]
+    [% WRAPPER breadcrumbs %]
+        [% IF blocking_error %]
+            [% WRAPPER breadcrumb_item bc_active= 1 %]
+                <span>Plugins</span>
+            [% END %]
+        [% ELSE %]
+            [% WRAPPER breadcrumb_item %]
+                <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
+            [% END %]
+            [% WRAPPER breadcrumb_item bc_active= 1 %]
+                <span>Item messages configuration</span>
+            [% END %]
+        [% END %]
+    [% END #/ WRAPPER breadcrumbs %]
+[% END #/ WRAPPER sub-header.inc %]
+
+<h2>Lightwave CraftMyPDF Plugin Configuration</h2>
+
+<form method="post" action="get_config.pl">
+  <label>CraftMyPDF API Key:</label>
+  <input type="text" name="api_key"><br><br>
+
+  <label>Reports Configuration:</label>
+  <table id="reportTable">
+    <tr>
+      <th>Report ID</th>
+      <th>Make.com Webhook URL</th>
+      <th>Email To</th>
+      <th>CC Email</th>
+      <th>PDF Expiration (minutes)</th>
+    </tr>
+    <tr>
+      <td><input type="text" name="report_id[]"></td>
+      <td><input type="text" name="webhook_url[]"></td>
+      <td><input type="text" name="email[]"></td>
+      <td><input type="text" name="cc_email[]"></td>
+      <td><input type="text" name="pdf_expire[]" value="15"></td>
+    </tr>
+  </table>
+  <button type="button" onclick="addRow()">Add Row</button><br><br>
+  <input type="submit" value="Save">
+</form>
+
+<script>
+function addRow() {
+  var table = document.getElementById('reportTable');
+  var row = table.insertRow(-1);
+  for (var i = 0; i < 5; i++) {
+    var cell = row.insertCell(i);
+    var input = document.createElement("input");
+    if (i == 4) input.value = "15"; // default PDF expiration
+    input.name = table.rows[0].cells[i].textContent.toLowerCase().replace(/ /g,'_')+'[]';
+    cell.appendChild(input);
+  }
+}
+</script>
+[% INCLUDE 'intranet-bottom.inc' %]
