@@ -1,85 +1,116 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>CraftMyPDF Integration Configuration</title>
-    <meta charset="utf-8">
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; }
-        input[type="text"] { width: 100%; padding: 8px; margin-bottom: 10px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        button { padding: 10px 15px; margin: 5px; }
-        .btn-primary { background-color: #007cba; color: white; border: none; }
-        .btn-secondary { background-color: #6c757d; color: white; border: none; }
-    </style>
+[% USE raw %]
+[% USE HtmlTags %]
+[% USE Koha %]
+[% USE Asset %]
+[% USE KohaDates %]
+[% PROCESS 'i18n.inc' %]
+[% SET footerjs = 1 %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>[% FILTER collapse %]
+    [% t("CraftMyPDF Integration Configuration") | html %] &rsaquo;
+    [% t("Koha") | html %]
+[% END %]</title>
+[% INCLUDE 'doc-head-close.inc' %]
 </head>
-<body>
-    <h2>CraftMyPDF Integration Configuration</h2>
-    <form method="post" action="/cgi-bin/koha/plugins/run.pl">
-        <input type="hidden" name="class" value="Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF">
-        <input type="hidden" name="method" value="configure">
-        <input type="hidden" name="save" value="1">
-        <input type="hidden" name="csrf_token" value="[% csrf_token | html %]">
-        <div class="form-group">
-            <label for="api_key">CraftMyPDF API Key (Optional):</label>
-            <input type="text" name="api_key" id="api_key" value="[% api_key | html %]">
-        </div>
-        <div class="form-group">
-            <label>Reports Configuration:</label>
-            <table id="reportTable">
-                <thead>
-                    <tr>
-                        <th>Report ID</th>
-                        <th>Make.com Webhook URL</th>
-                        <th>Email To</th>
-                        <th>CC Email</th>
-                        <th>PDF Expiration (minutes)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    [% IF configs.size %]
-                        [% FOREACH c IN configs %]
+<body id="plugins_craftmypdf" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% PROCESS 'about-team.inc' %]
+
+[% WRAPPER 'sub-header.inc' %]
+    [% WRAPPER breadcrumbs %]
+        [% WRAPPER breadcrumb_item %]
+            <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
+        [% END %]
+        [% WRAPPER breadcrumb_item bc_active=1 %]
+            <span>CraftMyPDF Integration Configuration</span>
+        [% END %]
+    [% END #/ WRAPPER breadcrumbs %]
+[% END #/ WRAPPER sub-header.inc %]
+
+<div id="doc3" class="main container-fluid">
+    <h1>CraftMyPDF Integration Configuration</h1>
+
+    <div class="page-section clearfix">
+        <form method="post">
+            [% INCLUDE 'csrf-token.inc' %]
+            <input type="hidden" name="class" value="[% CLASS | html %]">
+            <input type="hidden" name="method" value="[% METHOD | html %]">
+            <input type="hidden" name="save" value="1">
+
+            <fieldset class="rows">
+                <legend>CraftMyPDF Settings</legend>
+                <ol>
+                    <li>
+                        <label for="api_key">CraftMyPDF API Key (Optional):</label>
+                        <input type="text" name="api_key" id="api_key" value="[% api_key | html %]" size="50">
+                    </li>
+                </ol>
+            </fieldset>
+
+            <fieldset class="rows">
+                <legend>Reports Configuration</legend>
+                <table id="reportTable" class="table">
+                    <thead>
+                        <tr>
+                            <th>Report ID</th>
+                            <th>Make.com Webhook URL</th>
+                            <th>Email To</th>
+                            <th>CC Email</th>
+                            <th>PDF Expiration (minutes)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        [% IF configs.size %]
+                            [% FOREACH c IN configs %]
+                                <tr>
+                                    <td><input type="text" name="report_id[]" value="[% c.report_id | html %]"></td>
+                                    <td><input type="text" name="webhook_url[]" value="[% c.webhook | html %]" size="50"></td>
+                                    <td><input type="text" name="email[]" value="[% c.primary_email | html %]"></td>
+                                    <td><input type="text" name="cc_email[]" value="[% c.cc_email | html %]"></td>
+                                    <td><input type="text" name="pdf_expire[]" value="[% c.expiration | html %]" size="10"></td>
+                                </tr>
+                            [% END %]
+                        [% ELSE %]
                             <tr>
-                                <td><input type="text" name="report_id[]" value="[% c.report_id | html %]"></td>
-                                <td><input type="text" name="webhook_url[]" value="[% c.webhook | html %]"></td>
-                                <td><input type="text" name="email[]" value="[% c.primary_email | html %]"></td>
-                                <td><input type="text" name="cc_email[]" value="[% c.cc_email | html %]"></td>
-                                <td><input type="text" name="pdf_expire[]" value="[% c.expiration | html %]"></td>
+                                <td><input type="text" name="report_id[]"></td>
+                                <td><input type="text" name="webhook_url[]" size="50"></td>
+                                <td><input type="text" name="email[]"></td>
+                                <td><input type="text" name="cc_email[]"></td>
+                                <td><input type="text" name="pdf_expire[]" value="15" size="10"></td>
                             </tr>
                         [% END %]
-                    [% ELSE %]
-                        <tr>
-                            <td><input type="text" name="report_id[]"></td>
-                            <td><input type="text" name="webhook_url[]"></td>
-                            <td><input type="text" name="email[]"></td>
-                            <td><input type="text" name="cc_email[]"></td>
-                            <td><input type="text" name="pdf_expire[]" value="15"></td>
-                        </tr>
-                    [% END %]
-                </tbody>
-            </table>
-            <button type="button" onclick="addRow()">Add Row</button>
-        </div>
-        <button type="submit" class="btn btn-primary">Save</button>
-        <a href="/cgi-bin/koha/plugins/plugins-home.pl" class="btn btn-secondary">Cancel</a>
-    </form>
-    <script>
-    function addRow() {
-        var table = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
-        var row = table.insertRow(-1);
-        var fields = ['report_id[]', 'webhook_url[]', 'email[]', 'cc_email[]', 'pdf_expire[]'];
-        for (var i = 0; i < fields.length; i++) {
-            var cell = row.insertCell(i);
-            var input = document.createElement("input");
-            input.type = "text";
-            input.name = fields[i];
-            if (i == 4) input.value = "15";
-            cell.appendChild(input);
+                    </tbody>
+                </table>
+                <button type="button" class="btn" onclick="addRow()">Add Row</button>
+            </fieldset>
+
+            <fieldset class="action">
+                <button class="btn btn-primary" type="submit">Save configuration</button>
+                <a href="/cgi-bin/koha/plugins/plugins-home.pl" class="btn cancel">Cancel</a>
+            </fieldset>
+        </form>
+    </div>
+
+    <hr/>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]
+
+<script>
+function addRow() {
+    var table = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
+    var row = table.insertRow(-1);
+    var fields = ['report_id[]', 'webhook_url[]', 'email[]', 'cc_email[]', 'pdf_expire[]'];
+    for (var i = 0; i < fields.length; i++) {
+        var cell = row.insertCell(i);
+        var input = document.createElement("input");
+        input.type = "text";
+        input.name = fields[i];
+        if (i == 1) input.size = "50";
+        if (i == 4) {
+            input.value = "15";
+            input.size = "10";
         }
+        cell.appendChild(input);
     }
-    </script>
-</body>
-</html>
+}
+</script>
