@@ -4,15 +4,17 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 use JSON qw(encode_json decode_json);
 use CGI;
-use C4::Auth qw(get_session get_template_and_user);
+use C4::Auth qw(get_template_and_user);
+use C4::Context;
+use DBI;
 
-our $VERSION = "1.0";
+our $VERSION = "1.15";
 our $metadata = {
     name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
     description     => 'Integrates Koha guided reports with CraftMyPDF via Make.com webhooks for PDF generation and emailing.',
     date_authored   => '2025-10-12',
-    date_updated    => '2025-10-13',
+    date_updated    => '2025-10-14',
     minimum_version => '18.0000000',
     version         => $VERSION,
 };
@@ -22,57 +24,60 @@ sub new {
     $args->{metadata} = $metadata;
     $args->{metadata}->{class} = $class;
     my $self = $class->SUPER::new($args);
-    $self->store_data({ '__INSTALLED__' => 1, '__INSTALLED_VERSION__' => $VERSION }) unless $self->retrieve_data('__INSTALLED__');
     return $self;
 }
 
 sub configure {
     my ( $self ) = @_;
     my $cgi = $self->{'cgi'};
+
     unless ( $cgi->param('save') ) {
-        my ( $template, $loggedinuser, $cookie, $flags ) = get_template_and_user({
-            template_name   => "plugins/plugins-home.tt",
+        my ( $template, $loggedinuser, $cookie ) = get_template_and_user({
+            template_name   => $self->mbf_path('configure.tt'),
             query           => $cgi,
-            type            => "intranet",
+            type            => 'intranet',
             authnotrequired => 0,
             debug           => 1,
         });
-        my $config_json = $self->retrieve_data('config') || '[]';
-        my $configs = eval { decode_json($config_json) } || [];
-        $template = $self->get_template({ file => 'configure.tt' });
+
+        my $dbh = C4::Context->dbh;
+        my @configs;
+        my $sth = $dbh->prepare("SELECT id, report_id, webhook, primary_email, cc_email, expiration, api_key FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
+        $sth->execute();
+        while (my $row = $sth->fetchrow_hashref) {
+            push @configs, $row;
+        }
         $template->param(
-            api_key    => $self->retrieve_data('api_key') || '',
-            configs    => $configs,
-            csrf_token => C4::Auth::get_session($cgi->cookie('CGISESSID'))->param('csrf_token'),
+            CLASS      => 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
+            METHOD     => 'configure',
+            api_key    => $self->retrieve_data('api_key') || $configs[0]->{api_key} || '',
+            configs    => \@configs,
         );
-        print $cgi->header(-type => 'text/html', -charset => 'utf-8', -cookie => $cookie);
+        print $cgi->header(
+            {
+                -type     => 'text/html',
+                -charset  => 'UTF-8',
+                -encoding => 'UTF-8',
+                -cookie   => $cookie,
+            }
+        );
         print $template->output();
     } else {
         my $api_key = $cgi->param('api_key') || '';
+        $self->store_data({ api_key => $api_key });
+        my $dbh = C4::Context->dbh;
+        $dbh->do("DELETE FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
         my @report_ids = $cgi->multi_param('report_id[]');
         my @webhook_urls = $cgi->multi_param('webhook_url[]');
         my @emails = $cgi->multi_param('email[]');
         my @cc_emails = $cgi->multi_param('cc_email[]');
         my @expirations = $cgi->multi_param('pdf_expire[]');
-        my @configs;
+        my $sth = $dbh->prepare("INSERT INTO koha_plugin_com_lightwavelibrary_craftmypdf_configs (report_id, webhook, primary_email, cc_email, expiration, api_key) VALUES (?, ?, ?, ?, ?, ?)");
         for my $i (0 .. $#report_ids) {
             next unless $report_ids[$i] && $webhook_urls[$i] && $emails[$i];
-            push @configs, {
-                report_id => $report_ids[$i],
-                webhook => $webhook_urls[$i],
-                primary_email => $emails[$i],
-                cc_email => $cc_emails[$i] || '',
-                expiration => $expirations[$i] || 15,
-            };
+            $sth->execute($report_ids[$i], $webhook_urls[$i], $emails[$i], $cc_emails[$i] || '', $expirations[$i] || 15, $api_key);
         }
-        my $config_json = encode_json(\@configs);
-        $self->store_data({
-            api_key => $api_key,
-            config  => $config_json,
-            '__INSTALLED__' => 1,
-            '__INSTALLED_VERSION__' => $VERSION,
-        });
-        print $cgi->redirect('/cgi-bin/koha/plugins/run.pl?class=Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF&method=configure');
+        $self->go_home();
     }
 }
 
@@ -134,18 +139,45 @@ END_JS
 }
 
 sub install {
-    my ( $self ) = @_;
+    my ( $self, $args ) = @_;
+    my $dbh = C4::Context->dbh;
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS koha_plugin_com_lightwavelibrary_craftmypdf_configs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            report_id VARCHAR(255) NOT NULL,
+            webhook TEXT NOT NULL,
+            primary_email VARCHAR(255) NOT NULL,
+            cc_email VARCHAR(255) DEFAULT '',
+            expiration INT DEFAULT 15,
+            api_key TEXT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    });
     $self->store_data({ '__INSTALLED__' => 1, '__INSTALLED_VERSION__' => $VERSION });
     return 1;
 }
 
 sub upgrade {
     my ( $self ) = @_;
+    my $dbh = C4::Context->dbh;
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS koha_plugin_com_lightwavelibrary_craftmypdf_configs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            report_id VARCHAR(255) NOT NULL,
+            webhook TEXT NOT NULL,
+            primary_email VARCHAR(255) NOT NULL,
+            cc_email VARCHAR(255) DEFAULT '',
+            expiration INT DEFAULT 15,
+            api_key TEXT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    });
     return 1;
 }
 
 sub uninstall {
     my ( $self ) = @_;
+    my $dbh = C4::Context->dbh;
+    $dbh->do("DROP TABLE IF EXISTS koha_plugin_com_lightwavelibrary_craftmypdf_configs");
+    $self->store_data({ '__INSTALLED__' => 0, '__INSTALLED_VERSION__' => undef });
     return 1;
 }
 
