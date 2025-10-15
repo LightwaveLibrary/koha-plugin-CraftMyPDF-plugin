@@ -1,6 +1,6 @@
 <img width="1630" height="520" alt="configuration" src="https://lightwavelibrary.com/images/logo.svg" />
 
-This is a Koha plugin that allows for generating PDF reports via CraftMyPDF's report builders. This will require an account with (Make.com OR Zapier.com) and CraftMyPdf.com
+This is a Koha ILS plugin that allows generating PDF reports via a button from your Koha reports module. Using CraftMyPDF's report builders, you can now design fancy re-usable PDF Templates. This will require an account with (Make.com OR Zapier.com) and CraftMyPdf.com
 
 # Q: Who is this for?
 This is for the report builder enthusiast.  If you have any previous report building experience in a graphical IDE, such as MS SQL REPORTS or Crystal Reports, this will be right up your alley.  Any workflow experience will also help when it comes to using Make or Zapier. Typically a reason to want to create a PDF report is to use calculations, sums and groupings for very advanced and beautiful PDF reports.
