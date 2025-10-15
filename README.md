@@ -2,26 +2,31 @@
 This is a Koha plugin that allows for generating PDF reports via CraftMyPDF's report builders. This will require an account with (Make.com OR Zapier.com) and CraftMyPdf.com
 
 # Q: Who is this for?
-A: This is for the report builder enthusiast.  If you have any previous report building experience in a graphical IDE, such as MS SQL REPORTS or Crystal Reports, this will be right up your alley.  Any workflow experience will also help when it comes to using Make or Zapier. Typically a reason to want to create a PDF report is to use calculations, sums and groupings for very advanced and beautiful PDF reports.
+This is for the report builder enthusiast.  If you have any previous report building experience in a graphical IDE, such as MS SQL REPORTS or Crystal Reports, this will be right up your alley.  Any workflow experience will also help when it comes to using Make or Zapier. Typically a reason to want to create a PDF report is to use calculations, sums and groupings for very advanced and beautiful PDF reports.
 
-Q: Is Make/Zapier/CraftMyPDF free?
-A: Yes.  You can get started on free plans with the above mentioned sites. Of course with anything, if you want to use any of these services heavily, you will need to upgrade to a basic service plan.  CraftMyPDF has a free tier that allows up to 3 report templates and 50 executions per month.  This will be more than enough for providing state or board members, complex annual reports, as an example.
+# Q: Is Make/Zapier/CraftMyPDF free?
+Yes.  You can get started on free plans with the above mentioned sites. Of course with anything, if you want to use any of these services heavily, you will need to upgrade to a basic service plan.  CraftMyPDF has a free tier that allows up to 3 report templates and 50 executions per month.  This will be more than enough for providing state or board members, complex annual reports, as an example.
 
-Q: Do I have to use CraftMyPDF?
-A: In short, NO.  You can actually, through Make.com or Zapier.com, export to any supported 3rd party data processing widget. You can store JSON formatted objects to Google Docs, Airtable, or other scenario widgets that are supported.
+# Q: Do I have to use CraftMyPDF?
+In short, NO.  You can actually, through Make.com or Zapier.com, export to any supported 3rd party data processing widget. You can store JSON formatted objects to Google Docs, Airtable, or other scenario widgets that are supported.
 
 ============LET'S GET STARTED========(Video Links coming soon!)=======
 
-Step 1. Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
-Step 2. Create a free account on https://craftmypdf.com
-Step 3. Familiarize yourself with the PDF Editor 
-Step 4. Install this Koha plugin from the Releases section here in Github.
-Step 5. Select a Koha sql report to model against a PDF report.
+# Step 1. 
+Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
+# Step 2. 
+Create a free account on https://craftmypdf.com
+# Step 3. 
+Familiarize yourself with the PDF Editor 
+# Step 4. 
+Install this Koha plugin from the Releases section here in Github.
+# Step 5. 
+Select a Koha sql report to model against a PDF report.
 
-Configuration Screen:
+# Configuration Screen:
 <img width="1630" height="520" alt="configuration" src="https://github.com/user-attachments/assets/36d82657-bd2c-4017-8965-e28f18544cdc" />
 
-Determine Report Structure:
+# Determine Report Structure:
 <img width="897" height="412" alt="determine" src="https://github.com/user-attachments/assets/52560d9d-8ee6-4e06-ab37-9122235c3534" />
 
 
