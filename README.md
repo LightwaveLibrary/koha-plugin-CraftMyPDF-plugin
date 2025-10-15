@@ -12,15 +12,13 @@ In short, NO.  You can actually, through Make.com or Zapier.com, export to any s
 
 ============LET'S GET STARTED========(Video Links coming soon!)=======
 
-# Step 1. 
+# Step 1 
 Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
-# Step 2. 
+# Step 2 
 Create a free account on https://craftmypdf.com
-# Step 3. 
-Familiarize yourself with the PDF Editor 
-# Step 4. 
+# Step 3 
 Install this Koha plugin from the Releases section here in Github.
-# Step 5. 
+# Step 4 
 Select a Koha sql report to model against a PDF report.
 
 # Configuration Screen:
