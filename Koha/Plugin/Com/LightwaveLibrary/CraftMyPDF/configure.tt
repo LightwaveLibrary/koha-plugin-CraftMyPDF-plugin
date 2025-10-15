@@ -1,5 +1,7 @@
 [% USE raw %]
 [% USE HtmlTags %]
+[% USE raw %]
+[% USE HtmlTags %]
 [% USE Koha %]
 [% USE Asset %]
 [% USE KohaDates %]
@@ -44,6 +46,10 @@
                         <label for="api_key">CraftMyPDF API Key (Optional):</label>
                         <input type="text" name="api_key" id="api_key" value="[% api_key | html %]" size="50">
                     </li>
+                    <li>
+                        <label for="delete_on_uninstall">Delete settings on uninstall:</label>
+                        <input type="checkbox" name="delete_on_uninstall" id="delete_on_uninstall" [% IF delete_on_uninstall == '1' %]checked[% END %]>
+                    </li>
                 </ol>
             </fieldset>
 
@@ -52,11 +58,13 @@
                 <table id="reportTable" class="table">
                     <thead>
                         <tr>
-                            <th>Report ID</th>
+                            <th>Koha Report ID</th>
                             <th>Make.com Webhook URL</th>
                             <th>Email To</th>
                             <th>CC Email</th>
                             <th>PDF Expiration (minutes)</th>
+                            <th>Structure Determined</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -68,6 +76,8 @@
                                     <td><input type="text" name="email[]" value="[% c.primary_email | html %]"></td>
                                     <td><input type="text" name="cc_email[]" value="[% c.cc_email | html %]"></td>
                                     <td><input type="text" name="pdf_expire[]" value="[% c.expiration | html %]" size="10"></td>
+                                    <td>[% IF c.structure_determined %]Yes[% ELSE %]No[% END %]</td>
+                                    <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                                 </tr>
                             [% END %]
                         [% ELSE %]
@@ -77,40 +87,42 @@
                                 <td><input type="text" name="email[]"></td>
                                 <td><input type="text" name="cc_email[]"></td>
                                 <td><input type="text" name="pdf_expire[]" value="15" size="10"></td>
+                                <td>No</td>
+                                <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                             </tr>
                         [% END %]
                     </tbody>
                 </table>
-                <button type="button" class="btn" onclick="addRow()">Add Row</button>
+                <button type="button" class="btn btn-primary" onclick="addRow()">Add Row</button>
             </fieldset>
 
             <fieldset class="action">
                 <button class="btn btn-primary" type="submit">Save configuration</button>
-                <a href="/cgi-bin/koha/plugins/plugins-home.pl" class="btn cancel">Cancel</a>
+                <a href="/cgi-bin/koha/plugins/plugins-home.pl" class="btn btn-default">Cancel</a>
             </fieldset>
         </form>
     </div>
-
-    <hr/>
 </div>
 [% INCLUDE 'intranet-bottom.inc' %]
-
 <script>
 function addRow() {
     var table = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
-    var row = table.insertRow(-1);
-    var fields = ['report_id[]', 'webhook_url[]', 'email[]', 'cc_email[]', 'pdf_expire[]'];
-    for (var i = 0; i < fields.length; i++) {
-        var cell = row.insertCell(i);
-        var input = document.createElement("input");
-        input.type = "text";
-        input.name = fields[i];
-        if (i == 1) input.size = "50";
-        if (i == 4) {
-            input.value = "15";
-            input.size = "10";
-        }
-        cell.appendChild(input);
-    }
+    var row = table.insertRow();
+    row.innerHTML = `
+        <td><input type="text" name="report_id[]"></td>
+        <td><input type="text" name="webhook_url[]" size="50"></td>
+        <td><input type="text" name="email[]"></td>
+        <td><input type="text" name="cc_email[]"></td>
+        <td><input type="text" name="pdf_expire[]" value="15" size="10"></td>
+        <td>No</td>
+        <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
+    `;
+}
+
+function deleteRow(btn) {
+    var row = btn.parentNode.parentNode;
+    row.parentNode.removeChild(row);
 }
 </script>
+</body>
+</html>
