@@ -23,7 +23,7 @@ Install this Koha plugin from the Releases section here in Github.
 # Step 4 
 Select a Koha sql report to model against a PDF report.
 
-# Configuration Screen:
+# Configuration Screen of Plugin:
 <img width="1630" height="520" alt="configuration" src="https://github.com/user-attachments/assets/36d82657-bd2c-4017-8965-e28f18544cdc" />
 
 # Determine Report Structure:
@@ -31,5 +31,9 @@ Select a Koha sql report to model against a PDF report.
 
 # Sample Make.com Scenario Workflow
 [Watch the video](https://lightwavelibrary.com/videos/explain_make.mp4)
+
+# Quick Overview of the CraftMyPDF Editor
+[Watch the video](https://lightwavelibrary.com/videos/explain_craftmypdf.mp4)
+
 
 
