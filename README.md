@@ -29,5 +29,7 @@ Select a Koha sql report to model against a PDF report.
 # Determine Report Structure:
 <img width="897" height="412" alt="determine" src="https://github.com/user-attachments/assets/52560d9d-8ee6-4e06-ab37-9122235c3534" />
 
+# Sample Make.com Scenario Workflow
+<video src="https://lightwavelibrary.com/videos/explain_make.mp4" controls width="100%"></video>
 
 
