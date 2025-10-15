@@ -18,8 +18,8 @@ In these examples, I will be using Make.com and craftmypdf.com for these illustr
 Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
 # Step 2 
 Create a free account on https://craftmypdf.com
-Import this Materials Listing Template
-[Download Materials_Listing.template](https://lightwavelibrary.com/craftmypdf_templates/Materials_Listing.template)
+Import this Materials Listing Template<br>
+[Right Click here and Save Link as Materials_Listing.template](https://lightwavelibrary.com/craftmypdf_templates/Materials_Listing.template)
 # Step 3 
 Install this Koha plugin from the Releases section here in Github.
 # Step 4 
