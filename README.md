@@ -1,7 +1,7 @@
 # CraftMyPDF-plugin
 This is a Koha plugin that allows for generating PDF reports via CraftMyPDF's report builders. This will require an account with (Make.com OR Zapier.com) and CraftMyPdf.com
 
-Q: Who is this for?
+#Q: Who is this for?
 A: This is for the report builder enthusiast.  If you have any previous report building experience in a graphical IDE, such as MS SQL REPORTS or Crystal Reports, this will be right up your alley.  Any workflow experience will also help when it comes to using Make or Zapier. Typically a reason to want to create a PDF report is to use calculations, sums and groupings for very advanced and beautiful PDF reports.
 
 Q: Is Make/Zapier/CraftMyPDF free?
