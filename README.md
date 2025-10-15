@@ -1,5 +1,5 @@
 <img width="1630" height="520" alt="configuration" src="https://lightwavelibrary.com/images/logo.svg" />
-# CraftMyPDF-plugin
+
 This is a Koha plugin that allows for generating PDF reports via CraftMyPDF's report builders. This will require an account with (Make.com OR Zapier.com) and CraftMyPdf.com
 
 # Q: Who is this for?
