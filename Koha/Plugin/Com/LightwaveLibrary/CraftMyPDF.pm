@@ -15,7 +15,7 @@ our $metadata = {
     description     => 'Integrates Koha guided reports with CraftMyPDF via Make.com webhooks for PDF generation and emailing.',
     date_authored   => '2025-10-12',
     date_updated    => '2025-10-14',
-    minimum_version => '18.0000000',
+    minimum_version => '18.00',
     version         => $VERSION,
 };
 
