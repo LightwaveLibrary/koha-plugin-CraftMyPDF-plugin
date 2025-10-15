@@ -12,7 +12,7 @@ Yes.  You can get started on free plans with the above mentioned sites. Of cours
 In short, NO.  You can actually, through Make.com or Zapier.com, export to any supported 3rd party data processing widget. You can store JSON formatted objects to Google Docs, Airtable, or other scenario widgets that are supported. Other PDF candidate widgets include https://pdf.co , https://pdf4me.com and many more...
 
 # LET'S GET STARTED
-In these examples, I will be using Make.com for this illustrated steps.
+In these examples, I will be using Make.com and craftmypdf.com for these illustrated steps.
 
 # Step 1 
 Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
