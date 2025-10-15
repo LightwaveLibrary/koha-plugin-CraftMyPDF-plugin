@@ -8,13 +8,13 @@ use C4::Auth qw(get_template_and_user);
 use C4::Context;
 use DBI;
 
-our $VERSION = "1.36";
+our $VERSION = "1.39";
 our $metadata = {
     name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
     description     => 'Integrates Koha guided reports with CraftMyPDF via Make.com webhooks for PDF generation and emailing.',
     date_authored   => '2025-10-12',
-    date_updated    => '2025-10-14',
+    date_updated    => '2025-10-15',
     minimum_version => '18.00',
     version         => $VERSION,
 };
@@ -121,31 +121,71 @@ sub configure {
 sub intranet_js {
     my ( $self ) = @_;
     return <<'END_JS';
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 <script type="text/javascript">
 (function() {
     var buttonAdded = false;
 
+    function cleanText(text) {
+        var div = document.createElement('div');
+        div.innerHTML = text;
+        return div.textContent || div.innerText || '';
+    }
+
     function csvToJson(csv, report_id) {
-        console.log('CraftMyPDF: Parsing CSV for report ID ' + report_id + ', length = ' + csv.length);
-        var lines = csv.split('\n').filter(line => line.trim() !== '');
-        console.log('CraftMyPDF: CSV lines = ' + lines.length);
-        if (lines.length < 1) {
-            console.error('CraftMyPDF: No lines in CSV for report ID ' + report_id);
+        console.log('CraftMyPDF: Raw CSV for report ID ' + report_id + ' = ', csv);
+        // Normalize newlines and clean HTML
+        csv = csv.replace(/\r\n|\r/g, '\n').replace(/<[^>]+>|&[^;]+;/g, '').replace(/""/g, '"');
+        console.log('CraftMyPDF: Processed CSV for report ID ' + report_id + ' = ', csv);
+        try {
+            var parsed = Papa.parse(csv, {
+                header: true,
+                skipEmptyLines: true,
+                transform: function(value) {
+                    return cleanText(value).trim();
+                }
+            });
+            console.log('CraftMyPDF: Parsed CSV for report ID ' + report_id + ' = ', parsed);
+            if (parsed.errors.length > 0) {
+                console.error('CraftMyPDF: CSV parsing errors for report ID ' + report_id + ': ', parsed.errors);
+            }
+            var result = parsed.data;
+            console.log('CraftMyPDF: JSON result length for report ID ' + report_id + ' = ' + result.length);
+            return result;
+        } catch (e) {
+            console.error('CraftMyPDF: CSV parsing failed for report ID ' + report_id + ': ', e);
             return [];
         }
-        var headers = lines[0].match(/(?:"[^"]*"|[^,]*)/g).map(h => h.replace(/^"|"$/g, '').trim());
-        console.log('CraftMyPDF: Headers for report ID ' + report_id + ' = ', headers);
-        var result = [];
-        for (var i = 1; i < lines.length; i++) {
-            var row = lines[i].match(/(?:"[^"]*"|[^,]*)/g).map(cell => cell.replace(/^"|"$/g, '').trim());
-            console.log('CraftMyPDF: Row ' + i + ' for report ID ' + report_id + ' = ', row);
-            var obj = {};
-            headers.forEach((header, index) => {
-                obj[header] = row[index] !== undefined ? row[index] : '';
-            });
-            result.push(obj);
+    }
+
+    function tableToJson(report_id) {
+        console.log('CraftMyPDF: Attempting to parse table data for report ID ' + report_id);
+        var table = $('table:has(thead):has(tbody)').first();
+        if (!table.length) {
+            console.error('CraftMyPDF: No table found for report ID ' + report_id);
+            return [];
         }
-        console.log('CraftMyPDF: JSON result length for report ID ' + report_id + ' = ' + result.length);
+        var headers = table.find('thead th').map(function() {
+            return cleanText($(this).html()).trim();
+        }).get().filter(h => h !== '');
+        console.log('CraftMyPDF: Table headers for report ID ' + report_id + ' = ', headers);
+        var result = [];
+        table.find('tbody tr').each(function() {
+            var row = $(this).find('td').map(function() {
+                return cleanText($(this).html()).trim();
+            }).get();
+            console.log('CraftMyPDF: Raw table row for report ID ' + report_id + ' = ', row);
+            if (row.length >= headers.length) {
+                var obj = {};
+                headers.forEach((header, index) => {
+                    obj[header] = row[index] !== undefined ? row[index] : '';
+                });
+                result.push(obj);
+            } else {
+                console.warn('CraftMyPDF: Skipping malformed table row for report ID ' + report_id + ': ', row);
+            }
+        });
+        console.log('CraftMyPDF: Table JSON result length for report ID ' + report_id + ' = ' + result.length);
         return result;
     }
 
@@ -174,6 +214,17 @@ sub intranet_js {
                 if (data && data.webhook && data.primary_email) {
                     console.log('CraftMyPDF: Config found, adding button for report ID ' + report_id);
                     var buttonText = data.structure_determined == 1 ? 'Request PDF via CraftMyPDF' : 'Determine Report Structure';
+                    var urlParams = new URLSearchParams(window.location.search);
+                    var params = {};
+                    urlParams.forEach((value, key) => {
+                        if (key.startsWith('param_name') || key.startsWith('sql_params')) {
+                            params[key] = value;
+                        }
+                    });
+                    params.id = report_id;
+                    params.op = 'export';
+                    params.format = 'csv';
+                    params._ = new Date().getTime();
                     var button = $('<button>', {
                         id: 'craftmypdf-button',
                         text: buttonText,
@@ -181,18 +232,13 @@ sub intranet_js {
                         style: 'margin: 10px;',
                         click: function() {
                             console.log('CraftMyPDF: Button clicked for report ID ' + report_id);
-                            var jsonData = []; // Reset jsonData explicitly
+                            var jsonData = [];
                             $.ajax({
                                 url: '/cgi-bin/koha/reports/guided_reports.pl',
                                 type: 'GET',
-                                data: {
-                                    id: report_id,
-                                    op: 'export',
-                                    format: 'csv',
-                                    _: new Date().getTime() // Cache-busting parameter
-                                },
+                                data: params,
                                 dataType: 'text',
-                                cache: false, // Prevent browser caching
+                                cache: false,
                                 success: function(csv) {
                                     console.log('CraftMyPDF: CSV data received for report ID ' + report_id + ' = ', csv.substring(0, 100) + '...');
                                     if (!csv || csv.trim() === '') {
@@ -201,10 +247,14 @@ sub intranet_js {
                                         return;
                                     }
                                     jsonData = csvToJson(csv, report_id);
+                                    if (jsonData.length === 0) {
+                                        console.warn('CraftMyPDF: CSV parsing failed, trying table data for report ID ' + report_id);
+                                        jsonData = tableToJson(report_id);
+                                    }
                                     console.log('CraftMyPDF: JSON data for report ID ' + report_id + ' = ', jsonData);
                                     if (jsonData.length === 0) {
                                         console.error('CraftMyPDF: No valid JSON data converted for report ID ' + report_id);
-                                        alert('No valid report data found');
+                                        alert('Unable to parse report data due to formatting issues.');
                                         return;
                                     }
                                     $.ajax({
@@ -223,7 +273,7 @@ sub intranet_js {
                                             var alertMessage = data.structure_determined == 1 ? 'Request sent, and report will be sent to ' + data.primary_email + ' shortly.' : 'Request sent.';
                                             alert(alertMessage);
                                             if (data.structure_determined == 0) {
-                                                $('#craftmypdf-button').text('Request PDF via CraftMyPDF'); // Update button text immediately
+                                                $('#craftmypdf-button').text('Request PDF via CraftMyPDF');
                                                 $.ajax({
                                                     url: '/cgi-bin/koha/plugins/run.pl',
                                                     type: 'POST',
@@ -282,7 +332,7 @@ sub intranet_js {
         console.log('CraftMyPDF: intranet_js loaded');
         if (/guided_reports\.pl.*op=run/.test(window.location.href)) {
             console.log('CraftMyPDF: On report results page');
-            buttonAdded = false; // Reset buttonAdded for new page load
+            buttonAdded = false;
             var report_id = new URLSearchParams(window.location.search).get('id') || $('.report_number').text().trim();
             if (report_id) {
                 console.log('CraftMyPDF: Using report ID ' + report_id);
@@ -310,7 +360,6 @@ sub install {
         $sth->execute();
     };
     if ($@) {
-        # Table doesn't exist, create it
         $dbh->do(q{
             CREATE TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -324,7 +373,6 @@ sub install {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         });
     } else {
-        # Table exists, ensure structure_determined column exists
         eval {
             my $sth = $dbh->prepare("SELECT structure_determined FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
             $sth->execute();
@@ -345,7 +393,6 @@ sub upgrade {
         $sth->execute();
     };
     if ($@) {
-        # Table doesn't exist, create it
         $dbh->do(q{
             CREATE TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -359,7 +406,6 @@ sub upgrade {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         });
     } else {
-        # Table exists, ensure structure_determined column exists
         eval {
             my $sth = $dbh->prepare("SELECT structure_determined FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
             $sth->execute();
