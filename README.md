@@ -9,7 +9,7 @@ This is for the report builder enthusiast.  If you have any previous report buil
 Yes.  You can get started on free plans with the above mentioned sites. Of course with anything, if you want to use any of these services heavily, you will need to upgrade to a basic service plan.  CraftMyPDF has a free tier that allows up to 3 report templates and 50 executions per month.  This will be more than enough for providing state or board members, complex annual reports, as an example.
 
 # Q: Do I have to use CraftMyPDF?
-In short, NO.  You can actually, through Make.com or Zapier.com, export to any supported 3rd party data processing widget. You can store JSON formatted objects to Google Docs, Airtable, or other scenario widgets that are supported. Other PDF candidate widgets include https://pdf.co , https://pdf4me.com and many more...
+In short, NO.  You can, through Make.com or Zapier.com, export to any supported 3rd party data processing widget. You can store JSON formatted objects to Google Docs, Airtable, or other scenario widgets that are supported. Other PDF candidate widgets include https://pdf.co , https://pdf4me.com and many more...
 
 # LET'S GET STARTED
 In these examples, I will be using Make.com and craftmypdf.com for these illustrated steps.
