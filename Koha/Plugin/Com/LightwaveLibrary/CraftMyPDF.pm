@@ -8,7 +8,7 @@ use C4::Auth qw(get_template_and_user);
 use C4::Context;
 use DBI;
 
-our $VERSION = "1.39";
+our $VERSION = "1.40";
 our $metadata = {
     name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
@@ -134,7 +134,6 @@ sub intranet_js {
 
     function csvToJson(csv, report_id) {
         console.log('CraftMyPDF: Raw CSV for report ID ' + report_id + ' = ', csv);
-        // Normalize newlines and clean HTML
         csv = csv.replace(/\r\n|\r/g, '\n').replace(/<[^>]+>|&[^;]+;/g, '').replace(/""/g, '"');
         console.log('CraftMyPDF: Processed CSV for report ID ' + report_id + ' = ', csv);
         try {
@@ -332,6 +331,10 @@ sub intranet_js {
         console.log('CraftMyPDF: intranet_js loaded');
         if (/guided_reports\.pl.*op=run/.test(window.location.href)) {
             console.log('CraftMyPDF: On report results page');
+            if ($('#report_param_form').length > 0) {
+                console.log('CraftMyPDF: Parameter form detected, skipping button');
+                return;
+            }
             buttonAdded = false;
             var report_id = new URLSearchParams(window.location.search).get('id') || $('.report_number').text().trim();
             if (report_id) {
