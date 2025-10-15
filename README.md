@@ -18,8 +18,12 @@ In these examples, I will be using Make.com and craftmypdf.com for these illustr
 Create a free account on https://make.com, formerly integromat.com, OR https://zapier.com
 # Step 2 
 Create a free account on https://craftmypdf.com
+
+[Watch the video](https://lightwavelibrary.com/videos/explain_craftmypdf.mp4)
+
 Import this Materials Listing Template<br>
 [Right Click here and Save Link as Materials_Listing.template for a starting point](https://lightwavelibrary.com/craftmypdf_templates/Materials_Listing.template)
+
 # Step 3 
 Install this Koha plugin from the Releases section here in Github.
 # Step 4 
@@ -29,6 +33,7 @@ Select a Koha sql report to model against a PDF report.
 <img width="1630" height="520" alt="configuration" src="https://github.com/user-attachments/assets/36d82657-bd2c-4017-8965-e28f18544cdc" />
 
 # Determine Report Structure:
+This process sends a JSON structure of your displayed report to make.com or zapier.com.
 <img width="897" height="412" alt="determine" src="https://github.com/user-attachments/assets/52560d9d-8ee6-4e06-ab37-9122235c3534" />
 
 # Sample Make.com Scenario Workflow
