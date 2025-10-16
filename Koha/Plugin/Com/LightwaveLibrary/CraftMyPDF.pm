@@ -9,7 +9,7 @@ use C4::Context;
 use DBI;
 use LWP::UserAgent;
 
-our $VERSION = "1.45";
+our $VERSION = "1.47";
 our $metadata = {
     name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
