@@ -15,9 +15,6 @@ Create a free account on https://craftmypdf.com
 
 [Watch the quick overview of how it works video](https://lightwavelibrary.com/videos/HowToKohaPDF.mp4)
 
-Import this Materials Listing Template<br>
-[Right Click here and Save Link as Materials_Listing.template for a starting point](https://lightwavelibrary.com/craftmypdf_templates/Materials_Listing.template)
-
 # Step 2 
 Install this Koha plugin from the Releases section here in Github.
 
