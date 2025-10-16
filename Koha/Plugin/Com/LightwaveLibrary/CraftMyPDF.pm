@@ -331,7 +331,8 @@ sub intranet_js {
                                                     style: 'margin: 10px;',
                                                     click: function(e) {
                                                         e.preventDefault();
-                                                        window.location.href = response.file;
+                                                        window.open(response.file, '_blank');
+                                                        //window.location.href = response.file;
                                                     }
                                                 });
                                                 $('#craftmypdf-button').after(downloadLink);
