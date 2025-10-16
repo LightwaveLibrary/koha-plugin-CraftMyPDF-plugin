@@ -1,7 +1,5 @@
 [% USE raw %]
 [% USE HtmlTags %]
-[% USE raw %]
-[% USE HtmlTags %]
 [% USE Koha %]
 [% USE Asset %]
 [% USE KohaDates %]
@@ -13,6 +11,28 @@
     [% t("Koha") | html %]
 [% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
+<style>
+    .template-select {
+        display: inline-block !important;
+        visibility: visible !important;
+        min-width: 200px;
+        padding: 5px;
+        font-size: 14px;
+        height: auto;
+    }
+    .fetch-templates-btn {
+        margin-left: 10px;
+        vertical-align: middle;
+    }
+    .fetch-templates-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .template-container {
+        display: flex;
+        align-items: center;
+    }
+</style>
 </head>
 <body id="plugins_craftmypdf" class="plugins">
 [% INCLUDE 'header.inc' %]
@@ -43,8 +63,8 @@
                 <legend>CraftMyPDF Settings</legend>
                 <ol>
                     <li>
-                        <label for="api_key">CraftMyPDF API Key (Optional):</label>
-                        <input type="text" name="api_key" id="api_key" value="[% api_key | html %]" size="50">
+                        <label for="api_key" class="required">CraftMyPDF API Key:</label>
+                        <input type="text" name="api_key" id="api_key" value="[% api_key | html %]" size="50" required>
                     </li>
                     <li>
                         <label for="delete_on_uninstall">Delete settings on uninstall:</label>
@@ -58,11 +78,9 @@
                 <table id="reportTable" class="table">
                     <thead>
                         <tr>
-                            <th>Koha Report ID</th>
-                            <th>Make.com Webhook URL</th>
-                            <th>Email To</th>
-                            <th>CC Email</th>
-                            <th>PDF Expiration (minutes)</th>
+                            <th class="required">Koha Report ID</th>
+                            <th>PDF Expiration (days)</th>
+                            <th class="required">Template ID</th>
                             <th>Structure Determined</th>
                             <th>Action</th>
                         </tr>
@@ -71,22 +89,35 @@
                         [% IF configs.size %]
                             [% FOREACH c IN configs %]
                                 <tr>
-                                    <td><input type="text" name="report_id[]" value="[% c.report_id | html %]"></td>
-                                    <td><input type="text" name="webhook_url[]" value="[% c.webhook | html %]" size="50"></td>
-                                    <td><input type="text" name="email[]" value="[% c.primary_email | html %]"></td>
-                                    <td><input type="text" name="cc_email[]" value="[% c.cc_email | html %]"></td>
-                                    <td><input type="text" name="pdf_expire[]" value="[% c.expiration | html %]" size="10"></td>
+                                    <td><input type="text" name="report_id[]" value="[% c.report_id | html %]" required></td>
+                                    <td><input type="number" name="pdf_expire[]" value="[% c.expiration | html %]" min="1" size="10"></td>
+                                    <td>
+                                        <div class="template-container">
+                                            <select name="template_id[]" class="template-select" required>
+                                                <option value="">Select a template</option>
+                                                [% IF c.template_id %]
+                                                    <option value="[% c.template_id | html %]" selected>[% c.template_id | html %]</option>
+                                                [% END %]
+                                            </select>
+                                            <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
+                                        </div>
+                                    </td>
                                     <td>[% IF c.structure_determined %]Yes[% ELSE %]No[% END %]</td>
                                     <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                                 </tr>
                             [% END %]
                         [% ELSE %]
                             <tr>
-                                <td><input type="text" name="report_id[]"></td>
-                                <td><input type="text" name="webhook_url[]" size="50"></td>
-                                <td><input type="text" name="email[]"></td>
-                                <td><input type="text" name="cc_email[]"></td>
-                                <td><input type="text" name="pdf_expire[]" value="15" size="10"></td>
+                                <td><input type="text" name="report_id[]" required></td>
+                                <td><input type="number" name="pdf_expire[]" value="15" min="1" size="10"></td>
+                                <td>
+                                    <div class="template-container">
+                                        <select name="template_id[]" class="template-select" required>
+                                            <option value="">Select a template</option>
+                                        </select>
+                                        <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
+                                    </div>
+                                </td>
                                 <td>No</td>
                                 <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                             </tr>
@@ -109,20 +140,125 @@ function addRow() {
     var table = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
     var row = table.insertRow();
     row.innerHTML = `
-        <td><input type="text" name="report_id[]"></td>
-        <td><input type="text" name="webhook_url[]" size="50"></td>
-        <td><input type="text" name="email[]"></td>
-        <td><input type="text" name="cc_email[]"></td>
-        <td><input type="text" name="pdf_expire[]" value="15" size="10"></td>
+        <td><input type="text" name="report_id[]" required></td>
+        <td><input type="number" name="pdf_expire[]" value="15" min="1" size="10"></td>
+        <td>
+            <div class="template-container">
+                <select name="template_id[]" class="template-select" required>
+                    <option value="">Select a template</option>
+                </select>
+                <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
+            </div>
+        </td>
         <td>No</td>
         <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
     `;
+    bindFetchButton(row.querySelector('.fetch-templates-btn'));
 }
 
 function deleteRow(btn) {
     var row = btn.parentNode.parentNode;
     row.parentNode.removeChild(row);
 }
+
+function getCsrfToken() {
+    var metaTag = document.querySelector('meta[name="csrf-token"]');
+    return metaTag ? metaTag.getAttribute('content') : '';
+}
+
+function bindFetchButton(button) {
+    var apiKeyInput = document.getElementById('api_key');
+    var select = button.parentNode.querySelector('.template-select');
+
+    // Update button state based on API key
+    function updateButtonState() {
+        var apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+        button.disabled = !apiKey;
+        console.log('CraftMyPDF: Fetch button state updated, disabled:', button.disabled);
+    }
+
+    // Initial state and listen for API key changes
+    updateButtonState();
+    apiKeyInput.addEventListener('input', updateButtonState);
+
+    button.addEventListener('click', function() {
+        var apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+        if (!apiKey) {
+            alert('Please enter a valid CraftMyPDF API key first.');
+            console.log('CraftMyPDF: No API key provided');
+            select.innerHTML = '<option value="">Select a template</option>';
+            return;
+        }
+
+        button.disabled = true;
+        select.disabled = true;
+        select.innerHTML = '<option value="">Loading templates...</option>';
+        console.log('CraftMyPDF: Fetching templates with API key: ' + apiKey.substring(0, 5) + '...');
+
+        $.ajax({
+            url: '/cgi-bin/koha/plugins/run.pl',
+            type: 'POST',
+            data: {
+                class: 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
+                method: 'fetch_templates',
+                api_key: apiKey,
+                csrf_token: getCsrfToken()
+            },
+            dataType: 'json',
+            success: function(data) {
+                console.log('CraftMyPDF: Templates fetched for configuration: ', data);
+                select.disabled = false;
+                button.disabled = false;
+                select.innerHTML = '<option value="">Select a template</option>';
+
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    console.warn('CraftMyPDF: No templates found or invalid response format:', data);
+                    alert('No templates found.');
+                    return;
+                }
+
+                try {
+                    data.forEach(function(template) {
+                        if (template.templateId && template.name) {
+                            console.log('CraftMyPDF: Adding template:', template.name, template.templateId);
+                            var option = document.createElement('option');
+                            option.value = template.templateId;
+                            option.text = template.name + ' (' + template.templateId + ')';
+                            select.appendChild(option);
+                        } else {
+                            console.warn('CraftMyPDF: Skipping invalid template:', template);
+                        }
+                    });
+                    console.log('CraftMyPDF: Dropdown populated with', data.length, 'templates');
+                    // Force re-render
+                    setTimeout(function() {
+                        select.dispatchEvent(new Event('change'));
+                        console.log('CraftMyPDF: Dropdown re-render triggered');
+                    }, 100);
+                } catch (e) {
+                    console.error('CraftMyPDF: Error populating dropdown:', e);
+                    alert('Error populating templates: ' + e.message);
+                    select.innerHTML = '<option value="">Select a template</option>';
+                    button.disabled = false;
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('CraftMyPDF: Failed to fetch templates: ', status, error, xhr.responseText);
+                alert('Error fetching templates: ' + error);
+                select.disabled = false;
+                button.disabled = false;
+                select.innerHTML = '<option value="">Select a template</option>';
+            }
+        });
+    });
+}
+
+$(document).ready(function() {
+    console.log('CraftMyPDF: Configuration page loaded');
+    document.querySelectorAll('.fetch-templates-btn').forEach(function(button) {
+        bindFetchButton(button);
+    });
+});
 </script>
 </body>
 </html>
