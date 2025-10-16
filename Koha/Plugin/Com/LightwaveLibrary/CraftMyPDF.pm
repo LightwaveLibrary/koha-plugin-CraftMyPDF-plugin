@@ -324,18 +324,34 @@ sub intranet_js {
                                         success: function(response) {
                                             console.log('CraftMyPDF: PDF generated for report ID ' + report_id + ': ', response);
                                             if (response.file) {
-                                                var downloadLink = $('<a>', {
-                                                    href: response.file,
-                                                    text: 'Download PDF',
-                                                    class: 'btn btn-success',
-                                                    style: 'margin: 10px;',
-                                                    click: function(e) {
+                                                // Prevent duplicate download links: if a previous download anchor
+                                                // with id `craftmypdf-download` exists, update it instead of
+                                                // appending another one. This avoids multiple Download PDF
+                                                // buttons stacking up when generating repeatedly.
+                                                // If a download link already exists, update it instead of appending a new one
+                                                var existingDownload = $('#craftmypdf-download');
+                                                if (existingDownload.length) {
+                                                    existingDownload.attr('href', response.file);
+                                                    existingDownload.text('Download PDF');
+                                                    // remove old handlers and add a fresh click handler bound to the new URL
+                                                    existingDownload.off('click').on('click', function(e) {
                                                         e.preventDefault();
                                                         window.open(response.file, '_blank');
-                                                        //window.location.href = response.file;
-                                                    }
-                                                });
-                                                $('#craftmypdf-button').after(downloadLink);
+                                                    });
+                                                } else {
+                                                    var downloadLink = $('<a>', {
+                                                        id: 'craftmypdf-download',
+                                                        href: response.file,
+                                                        text: 'Download PDF',
+                                                        class: 'btn btn-success',
+                                                        style: 'margin: 10px;'
+                                                    });
+                                                    downloadLink.on('click', function(e) {
+                                                        e.preventDefault();
+                                                        window.open(response.file, '_blank');
+                                                    });
+                                                    $('#craftmypdf-button').after(downloadLink);
+                                                }
                                                 //alert('PDF generated successfully! Download here: ' + response.file);
                                                 // Store PDF URL in database
                                                 $.ajax({
