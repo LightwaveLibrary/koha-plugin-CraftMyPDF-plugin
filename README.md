@@ -21,4 +21,8 @@ Import this Materials Listing Template<br>
 # Step 2 
 Install this Koha plugin from the Releases section here in Github.
 
+# Step 3
+[Subscribe and Follow to get the latest report templates the community has to offer!](https://github.com/LightwaveLibrary/koha-plugin-CraftMyPDF-plugin/discussions/categories/report-templates)
+
+
 
