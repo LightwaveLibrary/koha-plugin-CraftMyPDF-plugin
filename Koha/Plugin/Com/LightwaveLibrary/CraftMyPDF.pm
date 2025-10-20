@@ -59,7 +59,7 @@ sub configure {
 
         my @configs;
         eval {
-            my $sth = $dbh->prepare("SELECT id, report_id, webhook, expiration, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
+            my $sth = $dbh->prepare("SELECT id, report_id, webhook, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
             $sth->execute();
             while (my $row = $sth->fetchrow_hashref) {
                 push @configs, $row;
@@ -104,12 +104,11 @@ sub configure {
             my $dbh = C4::Context->dbh or die "Failed to get database handle";
             $dbh->do("DELETE FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
             my @report_ids = $cgi->multi_param('report_id[]');
-            my @expirations = $cgi->multi_param('pdf_expire[]');
             my @template_ids = $cgi->multi_param('template_id[]');
-            my $sth = $dbh->prepare("INSERT INTO koha_plugin_com_lightwavelibrary_craftmypdf_configs (report_id, webhook, expiration, api_key, template_id) VALUES (?, '', ?, ?, ?)");
+            my $sth = $dbh->prepare("INSERT INTO koha_plugin_com_lightwavelibrary_craftmypdf_configs (report_id, webhook, api_key, template_id) VALUES (?, '', ?, ?)");
             for my $i (0 .. $#report_ids) {
                 next unless $report_ids[$i] && $template_ids[$i];
-                $sth->execute($report_ids[$i], $expirations[$i] || 15, $api_key, $template_ids[$i]);
+                $sth->execute($report_ids[$i], $api_key, $template_ids[$i]);
             }
         };
         if ($@) {
@@ -307,7 +306,7 @@ sub intranet_js {
                                     var payload = {
                                         template_id: data.template_id,
                                         export_type: 'json',
-                                        expiration: data.expiration || 15,
+                                            // expiration intentionally removed from payload; server controls PDF expiry
                                         output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
                                         data: { items: jsonData }
                                     };
@@ -473,7 +472,7 @@ sub get_config {
     }
 
     my $dbh = C4::Context->dbh;
-    my $sth = $dbh->prepare("SELECT report_id, webhook, expiration, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs WHERE report_id = ?");
+    my $sth = $dbh->prepare("SELECT report_id, webhook, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs WHERE report_id = ?");
     eval {
         $sth->execute($report_id);
     };
@@ -515,7 +514,6 @@ sub install {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 report_id VARCHAR(255) NOT NULL,
                 webhook TEXT,
-                expiration INT DEFAULT 15,
                 api_key TEXT NOT NULL,
                 template_id VARCHAR(255) DEFAULT ''
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -535,13 +533,7 @@ sub install {
         if (!$@) {
             $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs DROP COLUMN primary_email, DROP COLUMN cc_email");
         }
-        eval {
-            my $sth = $dbh->prepare("SELECT structure_determined FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
-            $sth->execute();
-        };
-        if (!$@) {
-            $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs DROP COLUMN structure_determined");
-        }
+        # structure_determined column removed from schema; no action required
     }
     eval {
         my $sth = $dbh->prepare("SELECT 1 FROM koha_plugin_com_lightwavelibrary_craftmypdf_pdfs LIMIT 1");
@@ -583,7 +575,6 @@ sub upgrade {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 report_id VARCHAR(255) NOT NULL,
                 webhook TEXT,
-                expiration INT DEFAULT 15,
                 api_key TEXT NOT NULL,
                 template_id VARCHAR(255) DEFAULT ''
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -602,6 +593,14 @@ sub upgrade {
         };
         if (!$@) {
             $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs DROP COLUMN primary_email, DROP COLUMN cc_email");
+        }
+        # If an old 'expiration' column exists, drop it (idempotent)
+        eval {
+            my $sth = $dbh->prepare("SELECT expiration FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
+            $sth->execute();
+        };
+        if (!$@) {
+            $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs DROP COLUMN expiration");
         }
         eval {
             my $sth = $dbh->prepare("SELECT structure_determined FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
