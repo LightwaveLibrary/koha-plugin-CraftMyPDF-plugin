@@ -80,6 +80,7 @@
                         <tr>
                             <th class="required">Koha Report ID</th>
                             <th class="required">Template ID</th>
+                            <th>Complex JSON?</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -99,6 +100,14 @@
                                             <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
                                         </div>
                                     </td>
+                                    <td>
+                                        <!-- Hidden input stores the value submitted to server; checkbox is purely UI and synced on submit -->
+                                        <input type="hidden" name="complex_json[]" value="[% IF c.complex_json == '1' %]1[% ELSE %]0[% END %]">
+                                        <label style="display:inline-flex;align-items:center;gap:6px;">
+                                            <input type="checkbox" class="complex-json-checkbox" [% IF c.complex_json == '1' %]checked[% END %]>
+                                            <a href="#" class="complex-json-help" style="color:#007bff;margin-left:4px;">What's This?</a>
+                                        </label>
+                                    </td>
                                     <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                                 </tr>
                             [% END %]
@@ -112,6 +121,13 @@
                                         </select>
                                         <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
                                     </div>
+                                </td>
+                                <td>
+                                    <input type="hidden" name="complex_json[]" value="0">
+                                    <label style="display:inline-flex;align-items:center;gap:6px;">
+                                        <input type="checkbox" class="complex-json-checkbox">
+                                        <a href="#" class="complex-json-help" style="color:#007bff;margin-left:4px;">What's This?</a>
+                                    </label>
                                 </td>
                                 <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
                             </tr>
@@ -142,6 +158,12 @@ function addRow() {
                 </select>
                 <button type="button" class="btn btn-primary fetch-templates-btn" disabled>Fetch CraftMyPDF Templates</button>
             </div>
+        </td>
+        <td>
+            <label style="display:inline-flex;align-items:center;gap:6px;">
+                <input type="checkbox" name="complex_json[]" value="1">
+                <a href="#" class="complex-json-help" style="color:#007bff;margin-left:4px;">What's This?</a>
+            </label>
         </td>
         <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
     `;
@@ -250,6 +272,66 @@ $(document).ready(function() {
     document.querySelectorAll('.fetch-templates-btn').forEach(function(button) {
         bindFetchButton(button);
     });
+    // Bind help link clicks to show modal
+    function bindHelpLinks() {
+        document.querySelectorAll('.complex-json-help').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var modal = document.getElementById('complexJsonModal');
+                if (modal) modal.style.display = 'block';
+            });
+        });
+    }
+    bindHelpLinks();
+    // Ensure newly added rows also have help binding by observing tbody
+    var tbody = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            bindHelpLinks();
+        });
+    });
+    observer.observe(tbody, { childList: true });
+});
+// Modal close handling
+document.addEventListener('click', function(e) {
+    var modal = document.getElementById('complexJsonModal');
+    if (!modal) return;
+    if (e.target.classList && e.target.classList.contains('complex-json-close')) {
+        modal.style.display = 'none';
+    }
+    // Close when clicking outside modal content
+    if (e.target == modal) {
+        modal.style.display = 'none';
+    }
+});
+
+// Insert modal HTML
+var modalHtml = `
+<div id="complexJsonModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100%;height:100%;overflow:auto;background-color:rgba(0,0,0,0.4);">
+  <div style="background-color:#fff;margin:10% auto;padding:20px;border:1px solid #888;width:80%;max-width:700px;border-radius:6px;">
+    <h3>Complex JSON Reports</h3>
+    <p>A Complex JSON report is typically designed in the Data tab and contains at least one child array embedded inside the main items array. When this box is checked the Koha report is expected to output a pure JSON body. The plugin will send that JSON body unchanged to the CraftMyPDF API and will not perform any CSV-to-table conversion routines.</p>
+    <p>Use this when your SQL returns a JSON object/array structure (for example using MySQL JSON_OBJECT / JSON_ARRAYAGG) rather than CSV rows.</p>
+    <p style="font-size:90%;color:#555;margin-top:1rem;">Example: an SQL that returns a top-level object with an "items" array where each item contains an "item_lines" child array.</p>
+    <div style="text-align:right;margin-top:1rem;"><button class="btn btn-default complex-json-close">Close</button></div>
+  </div>
+</div>`;
+document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+// Sync complex_json checkbox states to hidden inputs before form submit
+document.querySelector('form').addEventListener('submit', function(e) {
+    try {
+        var rows = document.querySelectorAll('#reportTable tbody tr');
+        rows.forEach(function(row) {
+            var hidden = row.querySelector('input[type=hidden][name="complex_json[]"]');
+            var checkbox = row.querySelector('.complex-json-checkbox');
+            if (hidden && checkbox) {
+                hidden.value = checkbox.checked ? '1' : '0';
+            }
+        });
+    } catch (err) {
+        console.error('CraftMyPDF: Failed to sync complex_json values before submit', err);
+    }
 });
 </script>
 </body>

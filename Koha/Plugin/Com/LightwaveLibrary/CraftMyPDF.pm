@@ -9,7 +9,7 @@ use C4::Context;
 use DBI;
 use LWP::UserAgent;
 
-our $VERSION = "1.47";
+our $VERSION = "1.48";
 our $metadata = {
     name            => 'CraftMyPDF Integration',
     author          => 'Rudy Hinojosa, Lightwave Library',
@@ -59,7 +59,7 @@ sub configure {
 
         my @configs;
         eval {
-            my $sth = $dbh->prepare("SELECT id, report_id, webhook, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
+            my $sth = $dbh->prepare("SELECT id, report_id, webhook, api_key, template_id, COALESCE(complex_json, '0') AS complex_json FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
             $sth->execute();
             while (my $row = $sth->fetchrow_hashref) {
                 push @configs, $row;
@@ -89,7 +89,7 @@ sub configure {
         );
         print $template->output();
     } else {
-        my $api_key = $cgi->param('api_key') || '';
+            my $api_key = $cgi->param('api_key') || '';
         unless ($api_key) {
             print $cgi->header(-status => 400);
             print "Error: API key is required";
@@ -105,10 +105,12 @@ sub configure {
             $dbh->do("DELETE FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
             my @report_ids = $cgi->multi_param('report_id[]');
             my @template_ids = $cgi->multi_param('template_id[]');
-            my $sth = $dbh->prepare("INSERT INTO koha_plugin_com_lightwavelibrary_craftmypdf_configs (report_id, webhook, api_key, template_id) VALUES (?, '', ?, ?)");
+            my @complex_flags = $cgi->multi_param('complex_json[]');
+            my $sth = $dbh->prepare("INSERT INTO koha_plugin_com_lightwavelibrary_craftmypdf_configs (report_id, webhook, api_key, template_id, complex_json) VALUES (?, '', ?, ?, ?)");
             for my $i (0 .. $#report_ids) {
                 next unless $report_ids[$i] && $template_ids[$i];
-                $sth->execute($report_ids[$i], $api_key, $template_ids[$i]);
+                my $complex = ($complex_flags[$i] && $complex_flags[$i] eq '1') ? '1' : '0';
+                $sth->execute($report_ids[$i], $api_key, $template_ids[$i], $complex);
             }
         };
         if ($@) {
@@ -472,7 +474,7 @@ sub get_config {
     }
 
     my $dbh = C4::Context->dbh;
-    my $sth = $dbh->prepare("SELECT report_id, webhook, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs WHERE report_id = ?");
+    my $sth = $dbh->prepare("SELECT report_id, webhook, api_key, template_id, COALESCE(complex_json, '0') AS complex_json FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs WHERE report_id = ?");
     eval {
         $sth->execute($report_id);
     };
@@ -505,7 +507,7 @@ sub install {
     my ( $self, $args ) = @_;
     my $dbh = C4::Context->dbh;
     eval {
-        my $sth = $dbh->prepare("SELECT 1 FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
+            my $sth = $dbh->prepare("SELECT 1 FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
         $sth->execute();
     };
     if ($@) {
@@ -515,7 +517,8 @@ sub install {
                 report_id VARCHAR(255) NOT NULL,
                 webhook TEXT,
                 api_key TEXT NOT NULL,
-                template_id VARCHAR(255) DEFAULT ''
+                    template_id VARCHAR(255) DEFAULT '',
+                    complex_json VARCHAR(1) DEFAULT '0'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         });
     } else {
@@ -525,6 +528,14 @@ sub install {
         };
         if ($@) {
             $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs ADD COLUMN template_id VARCHAR(255) DEFAULT '' AFTER api_key");
+        }
+        # ensure complex_json exists
+        eval {
+            my $sth = $dbh->prepare("SELECT complex_json FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
+            $sth->execute();
+        };
+        if ($@) {
+            $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs ADD COLUMN complex_json VARCHAR(1) DEFAULT '0' AFTER template_id");
         }
         eval {
             my $sth = $dbh->prepare("SELECT primary_email FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs LIMIT 1");
