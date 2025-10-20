@@ -522,6 +522,19 @@ sub intranet_js {
                                     if (!textBody || (typeof textBody === 'string' && textBody.trim() === '')) {
                                         console.warn('CraftMyPDF: Empty textBody returned from guided_reports, attempting DOM fallback for JSON');
                                         var domCandidate = null;
+                                        // Try the exact table cell XPath the report uses: #report_results tbody tr td
+                                        try {
+                                            var tdNodes = document.querySelectorAll('#report_results tbody tr td');
+                                            if (tdNodes && tdNodes.length) {
+                                                var combined = Array.from(tdNodes).map(function(n){ return (n.textContent||'').trim(); }).filter(Boolean).join(' ');
+                                                if (combined && (/^[\[\{]/.test(combined))) {
+                                                    domCandidate = combined;
+                                                    console.log('CraftMyPDF: Found candidate JSON in #report_results tbody td (truncated):', combined.substring(0,200));
+                                                }
+                                            }
+                                        } catch (tdErr) {
+                                            // ignore
+                                        }
                                         // Common places where JSON might be rendered
                                         var selectors = ['#report_results', '.reportresults', 'pre', 'code', 'textarea', '.report_content', '.reportdata', 'body'];
                                         for (var s=0; s<selectors.length && !domCandidate; s++) {
