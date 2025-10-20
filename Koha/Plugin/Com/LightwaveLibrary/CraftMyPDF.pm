@@ -269,6 +269,195 @@ sub intranet_js {
         return result;
     }
 
+    function sendPayloadToCraft(originalData, payload, apiKey, report_id) {
+        // Ensure payload.data is a string (CraftMyPDF accepts either a stringified JSON or an object,
+        // but examples and some template engines expect a string). Stringify to be explicit.
+        try {
+            if (payload && typeof payload.data !== 'string') {
+                payload.data = JSON.stringify(payload.data);
+            }
+        } catch (stringifyError) {
+            console.error('CraftMyPDF: Failed to stringify payload.data for report ID ' + report_id + ':', stringifyError);
+            alert('Failed to prepare report data for PDF generation. See console for details.');
+            return;
+        }
+
+        console.log('CraftMyPDF: Preparing payload for report ID ' + report_id + ' (template ' + (payload && payload.template_id) + ')');
+        var requestUrl = 'https://api.craftmypdf.com/v1/create';
+        var requestHeaders = {
+            'X-API-KEY': apiKey,
+            'Content-Type': 'application/json'
+        };
+        var requestBody = null;
+        try {
+            requestBody = JSON.stringify(payload);
+        } catch (rbErr) {
+            console.error('CraftMyPDF: Failed to stringify final request body for report ID ' + report_id + ':', rbErr);
+            alert('Failed to prepare request body for CraftMyPDF. See console for details.');
+            return;
+        }
+
+        // Log the exact API call details for debugging
+        console.log('CraftMyPDF: API request ->', {
+            url: requestUrl,
+            method: 'POST',
+            headers: requestHeaders,
+            bodyPreview: (requestBody && requestBody.length > 2000) ? requestBody.substring(0,2000) + '... (truncated)' : requestBody,
+            bodyLength: requestBody ? requestBody.length : 0
+        });
+
+        $.ajax({
+            url: requestUrl,
+            type: 'POST',
+            headers: requestHeaders,
+            contentType: 'application/json',
+            data: requestBody,
+            success: function(response) {
+                console.log('CraftMyPDF: PDF generated for report ID ' + report_id + ': ', response);
+                if (response.file) {
+                    var existingDownload = $('#craftmypdf-download');
+                    if (existingDownload.length) {
+                        existingDownload.attr('href', response.file);
+                        existingDownload.text('Download PDF');
+                        existingDownload.off('click').on('click', function(e) {
+                            e.preventDefault();
+                            window.open(response.file, '_blank');
+                        });
+                    } else {
+                        var downloadLink = $('<a>', {
+                            id: 'craftmypdf-download',
+                            href: response.file,
+                            text: 'Download PDF',
+                            class: 'btn btn-success',
+                            style: 'margin: 10px;'
+                        });
+                        downloadLink.on('click', function(e) {
+                            e.preventDefault();
+                            window.open(response.file, '_blank');
+                        });
+                        $('#craftmypdf-button').after(downloadLink);
+                    }
+                    // Store PDF URL in database
+                    $.ajax({
+                        url: '/cgi-bin/koha/plugins/run.pl',
+                        type: 'POST',
+                        data: {
+                            class: 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
+                            method: 'store_pdf_url',
+                            report_id: report_id,
+                            pdf_url: response.file
+                        },
+                        success: function() {
+                            console.log('CraftMyPDF: PDF URL stored for report ID ' + report_id);
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('CraftMyPDF: Failed to store PDF URL for report ID ' + report_id, status, error, xhr.responseText);
+                        }
+                    });
+                } else {
+                    console.error('CraftMyPDF: No file URL in response for report ID ' + report_id);
+                    alert('Error generating PDF: No file URL returned');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('CraftMyPDF: PDF generation failed for report ID ' + report_id, status, error, xhr.responseText);
+                alert('Error generating PDF: ' + error);
+            }
+        });
+    }
+
+    // Try to extract a pure JSON substring from arbitrary text output using bracket matching.
+    function extractJsonFromText(text) {
+        if (!text) return null;
+        var t = String(text).trim();
+
+        // If the response is HTML-wrapped, try to extract the content of <pre>, <textarea>, or <code> first.
+        try {
+            if (/<\/\w+>/.test(t)) {
+                var div = document.createElement('div');
+                div.innerHTML = t;
+                var pre = div.querySelector('pre, textarea, code');
+                if (pre && pre.textContent && pre.textContent.trim()) {
+                    t = pre.textContent.trim();
+                } else {
+                    // Fall back to textContent of the whole HTML
+                    var txt = div.textContent || div.innerText || '';
+                    if (txt && txt.trim()) { t = txt.trim(); }
+                }
+            }
+        } catch (htmlErr) {
+            // ignore and continue with original text
+            console.warn('CraftMyPDF: HTML extraction encountered an error', htmlErr);
+        }
+
+        // Try parsing entire text first
+        try {
+            return JSON.parse(t);
+        } catch (e) {
+            // Continue to substring extraction
+        }
+
+        // Strategy: try a quick first/last brace substring grab, then fall back to robust bracket matching
+        var firstBrace = t.search(/[\{\[]/);
+        var lastCurl = t.lastIndexOf('}');
+        var lastSquare = t.lastIndexOf(']');
+        var lastBrace = Math.max(lastCurl, lastSquare);
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            var quickCandidate = t.substring(firstBrace, lastBrace + 1);
+            try {
+                return JSON.parse(quickCandidate);
+            } catch (qErr) {
+                console.warn('CraftMyPDF: Quick substring parse failed, will try robust extraction', qErr, quickCandidate.substring(0,200));
+            }
+        }
+
+        // Robust bracket-matching extraction (respecting strings and escapes)
+        var firstObj = t.indexOf('{');
+        var firstArr = t.indexOf('[');
+        if (firstObj === -1 && firstArr === -1) {
+            console.error('CraftMyPDF: No JSON opening bracket found in text');
+            console.debug('CraftMyPDF: Raw text (truncated):', t.substring(0,500));
+            return null;
+        }
+        var start = (firstObj === -1 || (firstArr !== -1 && firstArr < firstObj)) ? firstArr : firstObj;
+
+        var stack = [];
+        var inString = false;
+        var escape = false;
+        var end = -1;
+
+        for (var i = start; i < t.length; i++) {
+            var ch = t[i];
+            if (inString) {
+                if (escape) { escape = false; continue; }
+                if (ch === '\\') { escape = true; continue; }
+                if (ch === '"') { inString = false; }
+                continue;
+            } else {
+                if (ch === '"') { inString = true; continue; }
+                if (ch === '{' || ch === '[') { stack.push(ch); continue; }
+                if ((ch === '}' || ch === ']') && stack.length > 0) {
+                    var last = stack.pop();
+                    if (stack.length === 0) { end = i; break; }
+                }
+            }
+        }
+
+        if (start === -1 || end === -1 || end <= start) {
+            console.error('CraftMyPDF: Could not locate matching JSON bounds in text');
+            console.debug('CraftMyPDF: Raw text (truncated):', t.substring(0,1000));
+            return null;
+        }
+
+        var candidate = t.substring(start, end + 1);
+        try {
+            return JSON.parse(candidate);
+        } catch (e2) {
+            console.error('CraftMyPDF: Failed to parse extracted JSON candidate', e2, 'candidate=', candidate.substring(0,1000));
+            return null;
+        }
+    }
+
     function addCraftMyPDFButton(report_id) {
         if (buttonAdded || $('#craftmypdf-button').length > 0) {
             console.log('CraftMyPDF: Button already exists or added for report ID ' + report_id + ', skipping');
@@ -286,119 +475,131 @@ sub intranet_js {
             dataType: 'json',
             success: function(data) {
                 console.log('CraftMyPDF: Config data for report ID ' + report_id + ' = ', data);
-                if (data && data.api_key && data.template_id) {
-                    console.log('CraftMyPDF: Config found, adding button for report ID ' + report_id);
-                    var urlParams = new URLSearchParams(window.location.search);
-                    var params = {};
-                    urlParams.forEach((value, key) => {
-                        if (key.startsWith('param_name') || key.startsWith('sql_params')) {
-                            params[key] = value;
-                        }
+                if (!(data && data.api_key)) {
+                    console.log('CraftMyPDF: No config (api_key missing) for report ID ' + report_id);
+                    return;
+                }
+
+                var urlParams = new URLSearchParams(window.location.search);
+                var params = {};
+                urlParams.forEach((value, key) => {
+                    if (key.startsWith('param_name') || key.startsWith('sql_params')) {
+                        params[key] = value;
+                    }
+                });
+                params.id = report_id;
+                params.op = 'export';
+                var isComplex = (data && data.complex_json && data.complex_json === '1');
+                params.format = isComplex ? 'json' : 'csv';
+                params._ = new Date().getTime();
+
+                var hasTemplate = (data.template_id && data.template_id !== '');
+                var button = $('<button>', {
+                    id: 'craftmypdf-button',
+                    text: hasTemplate ? 'Generate PDF' : 'Configure Template',
+                    class: hasTemplate ? 'btn btn-primary' : 'btn btn-secondary',
+                    style: 'margin: 10px;'
+                });
+
+                if (!hasTemplate) {
+                    button.on('click', function() {
+                        alert('No CraftMyPDF template is configured for this report.\n\nPlease open the CraftMyPDF plugin settings and assign a Template ID for report ' + report_id + '.');
                     });
-                    params.id = report_id;
-                    params.op = 'export';
-                    // Respect complex_json flag from config: if set, ask Koha to return JSON
-                    var isComplex = (data && data.complex_json && data.complex_json === '1');
-                    params.format = isComplex ? 'json' : 'csv';
-                    params._ = new Date().getTime();
-                    var button = $('<button>', {
-                        id: 'craftmypdf-button',
-                        text: 'Generate PDF',
-                        class: 'btn btn-primary',
-                        style: 'margin: 10px;',
-                            click: function() {
-                            console.log('CraftMyPDF: Generate PDF button clicked for report ID ' + report_id + ', complex_json=' + isComplex);
-                            // If complex JSON is enabled for this report, request JSON output
-                            if (isComplex) {
-                                $.ajax({
-                                    url: '/cgi-bin/koha/reports/guided_reports.pl',
-                                    type: 'GET',
-                                    data: params,
-                                    dataType: 'json',
-                                    cache: false,
-                                    success: function(jsonBody) {
-                                        console.log('CraftMyPDF: JSON body received for report ID ' + report_id + ' = ', jsonBody);
-                                        if (!jsonBody) {
-                                            console.error('CraftMyPDF: No JSON data received for report ID ' + report_id);
-                                            alert('No report data found');
-                                            return;
-                                        }
-                                        // When complex JSON is used, send the body unchanged to CraftMyPDF API
-                                        var payload = {
-                                            template_id: data.template_id,
-                                            export_type: 'json',
-                                            output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
-                                            data: jsonBody
-                                        };
-                                        console.log('CraftMyPDF: JSON payload (complex) sent to CraftMyPDF API for report ID ' + report_id + ' = ', payload);
-                                        $.ajax({
-                                            url: 'https://api.craftmypdf.com/v1/create',
-                                            type: 'POST',
-                                            headers: {
-                                                'X-API-KEY': data.api_key,
-                                                'Content-Type': 'application/json'
-                                            },
-                                            contentType: 'application/json',
-                                            data: JSON.stringify(payload),
-                                            success: function(response) {
-                                            console.log('CraftMyPDF: PDF generated for report ID ' + report_id + ': ', response);
-                                            if (response.file) {
-                                                // Prevent duplicate download links: if a previous download anchor
-                                                // with id `craftmypdf-download` exists, update it instead of
-                                                // appending another one. This avoids multiple Download PDF
-                                                // buttons stacking up when generating repeatedly.
-                                                // If a download link already exists, update it instead of appending a new one
-                                                var existingDownload = $('#craftmypdf-download');
-                                                if (existingDownload.length) {
-                                                    existingDownload.attr('href', response.file);
-                                                    existingDownload.text('Download PDF');
-                                                    // remove old handlers and add a fresh click handler bound to the new URL
-                                                    existingDownload.off('click').on('click', function(e) {
-                                                        e.preventDefault();
-                                                        window.open(response.file, '_blank');
-                                                    });
-                                                } else {
-                                                    var downloadLink = $('<a>', {
-                                                        id: 'craftmypdf-download',
-                                                        href: response.file,
-                                                        text: 'Download PDF',
-                                                        class: 'btn btn-success',
-                                                        style: 'margin: 10px;'
-                                                    });
-                                                    downloadLink.on('click', function(e) {
-                                                        e.preventDefault();
-                                                        window.open(response.file, '_blank');
-                                                    });
-                                                    $('#craftmypdf-button').after(downloadLink);
-                                                }
-                                                //alert('PDF generated successfully! Download here: ' + response.file);
-                                                // Store PDF URL in database
-                                                $.ajax({
-                                                    url: '/cgi-bin/koha/plugins/run.pl',
-                                                    type: 'POST',
-                                                    data: {
-                                                        class: 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
-                                                        method: 'store_pdf_url',
-                                                        report_id: report_id,
-                                                        pdf_url: response.file
-                                                    },
-                                                    success: function() {
-                                                        console.log('CraftMyPDF: PDF URL stored for report ID ' + report_id);
-                                                    },
-                                                    error: function(xhr, status, error) {
-                                                        console.error('CraftMyPDF: Failed to store PDF URL for report ID ' + report_id, status, error, xhr.responseText);
+                } else {
+                    button.on('click', function() {
+                        console.log('CraftMyPDF: Generate PDF button clicked for report ID ' + report_id + ', complex_json=' + isComplex);
+                        if (isComplex) {
+                            // Request report as text and attempt to extract pure JSON
+                            $.ajax({
+                                url: '/cgi-bin/koha/reports/guided_reports.pl',
+                                type: 'GET',
+                                data: params,
+                                dataType: 'text',
+                                cache: false,
+                                success: function(textBody) {
+                                    console.log('CraftMyPDF: Raw text received for report ID ' + report_id + ' = ', (textBody && textBody.substring) ? textBody.substring(0,200) + '...' : textBody);
+                                    // If the server returned an empty body, try to find JSON already rendered on the page
+                                    if (!textBody || (typeof textBody === 'string' && textBody.trim() === '')) {
+                                        console.warn('CraftMyPDF: Empty textBody returned from guided_reports, attempting DOM fallback for JSON');
+                                        var domCandidate = null;
+                                        // Common places where JSON might be rendered
+                                        var selectors = ['#report_results', '.reportresults', 'pre', 'code', 'textarea', '.report_content', '.reportdata', 'body'];
+                                        for (var s=0; s<selectors.length && !domCandidate; s++) {
+                                            try {
+                                                var el = document.querySelector(selectors[s]);
+                                                if (el && el.textContent) {
+                                                    var txt = el.textContent.trim();
+                                                    if (txt && (/^[\[\{]/.test(txt))) {
+                                                        domCandidate = txt;
+                                                        console.log('CraftMyPDF: Found candidate JSON in selector ' + selectors[s] + ' (truncated):', txt.substring(0,200));
+                                                        break;
                                                     }
-                                                });
-                                            } else {
-                                                console.error('CraftMyPDF: No file URL in response for report ID ' + report_id);
-                                                alert('Error generating PDF: No file URL returned');
+                                                }
+                                            } catch (domErr) {
+                                                // ignore selector errors
                                             }
-                                        },
-                                        error: function(xhr, status, error) {
-                                            console.error('CraftMyPDF: PDF generation failed for report ID ' + report_id, status, error, xhr.responseText);
-                                            alert('Error generating PDF: ' + error);
                                         }
-                                    });
+                                        // As a last resort, scan all <pre> and <code> blocks for JSON-like starts
+                                        if (!domCandidate) {
+                                            var blocks = document.querySelectorAll('pre, code, textarea, div, span');
+                                            for (var i=0;i<blocks.length;i++) {
+                                                try {
+                                                    var t = (blocks[i].textContent || '').trim();
+                                                    if (t && (/^[\[\{]/.test(t))) { domCandidate = t; console.log('CraftMyPDF: Found candidate JSON in DOM block (truncated):', t.substring(0,200)); break; }
+                                                } catch (be) {}
+                                            }
+                                        }
+                                        if (domCandidate) { textBody = domCandidate; }
+                                    }
+
+                                    var parsed = extractJsonFromText(textBody);
+                                    if (!parsed) {
+                                        console.error('CraftMyPDF: Failed to extract JSON from report text for report ID ' + report_id);
+                                        alert('Failed to parse JSON report data. Ensure the report outputs valid JSON. Check the console/network tab for the full response.');
+                                        return;
+                                    }
+                                    var payload = {
+                                        template_id: data.template_id,
+                                        export_type: 'json',
+                                        output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
+                                        data: parsed
+                                    };
+                                    sendPayloadToCraft(parsed, payload, data.api_key, report_id);
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('CraftMyPDF: Failed to fetch report text for report ID ' + report_id, status, error, xhr.responseText);
+                                    alert('Error fetching report data: ' + error);
+                                }
+                            });
+                        } else {
+                            // Existing CSV -> JSON flow
+                            $.ajax({
+                                url: '/cgi-bin/koha/reports/guided_reports.pl',
+                                type: 'GET',
+                                data: params,
+                                dataType: 'text',
+                                cache: false,
+                                success: function(csv) {
+                                    console.log('CraftMyPDF: CSV data received for report ID ' + report_id + ' = ', (csv && csv.substring) ? csv.substring(0, 100) + '...' : csv);
+                                    if (!csv || csv.trim() === '') {
+                                        alert('No report data found');
+                                        return;
+                                    }
+                                    var jsonData = csvToJson(csv, report_id);
+                                    if (jsonData.length === 0) {
+                                        jsonData = tableToJson(report_id);
+                                    }
+                                    if (jsonData.length === 0) {
+                                        alert('Unable to parse report data due to formatting issues.');
+                                        return;
+                                    }
+                                    var payload = {
+                                        template_id: data.template_id,
+                                        export_type: 'json',
+                                        output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
+                                        data: { items: jsonData }
+                                    };
+                                    sendPayloadToCraft(jsonData, payload, data.api_key, report_id);
                                 },
                                 error: function(xhr, status, error) {
                                     console.error('CraftMyPDF: Failed to fetch CSV data for report ID ' + report_id, status, error, xhr.responseText);
@@ -407,22 +608,19 @@ sub intranet_js {
                             });
                         }
                     });
-                    var downloadBlock = $("#downloadblock, .downloadblock").first();
-                    if (downloadBlock.length > 0) {
-                        console.log('CraftMyPDF: Appending to downloadblock for report ID ' + report_id);
-                        downloadBlock.append(button);
-                    } else if ($(".report_number").length > 0) {
-                        console.log('CraftMyPDF: Prepending to .report_number parent for report ID ' + report_id);
-                        $(".report_number").parent().prepend(button);
-                    } else {
-                        console.log('CraftMyPDF: Prepending to body for report ID ' + report_id);
-                        $("body").prepend(button);
-                    }
-                    buttonAdded = true;
-                    console.log('CraftMyPDF: Button added successfully for report ID ' + report_id);
-                } else {
-                    console.log('CraftMyPDF: No config found for report ID ' + report_id);
                 }
+
+                // Append button to page
+                var downloadBlock = $("#downloadblock, .downloadblock").first();
+                if (downloadBlock.length > 0) {
+                    downloadBlock.append(button);
+                } else if ($(".report_number").length > 0) {
+                    $(".report_number").parent().prepend(button);
+                } else {
+                    $("body").prepend(button);
+                }
+                buttonAdded = true;
+                console.log('CraftMyPDF: Button added successfully for report ID ' + report_id);
             },
             error: function(xhr, status, error) {
                 console.error('CraftMyPDF: Failed to fetch config for report ID ' + report_id, status, error, xhr.responseText);
@@ -503,6 +701,11 @@ sub get_config {
 
     my $row = $sth->fetchrow_hashref;
     if ($row) {
+        # If the per-config api_key is empty, fall back to plugin-level stored api_key
+        if (!$row->{api_key} || $row->{api_key} eq '') {
+            my $global_api_key = $self->retrieve_data('api_key') || '';
+            $row->{api_key} = $global_api_key;
+        }
         warn "CraftMyPDF: Config found for report_id $report_id: " . encode_json($row);
         return $self->output_json(encode_json($row));
     } else {
