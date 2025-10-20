@@ -160,8 +160,10 @@ function addRow() {
             </div>
         </td>
         <td>
+            <!-- Hidden input stores the value submitted to server; checkbox is purely UI and synced on submit -->
+            <input type="hidden" name="complex_json[]" value="0">
             <label style="display:inline-flex;align-items:center;gap:6px;">
-                <input type="checkbox" name="complex_json[]" value="1">
+                <input type="checkbox" class="complex-json-checkbox">
                 <a href="#" class="complex-json-help" style="color:#007bff;margin-left:4px;">What's This?</a>
             </label>
         </td>

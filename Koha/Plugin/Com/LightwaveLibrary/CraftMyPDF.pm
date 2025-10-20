@@ -297,58 +297,50 @@ sub intranet_js {
                     });
                     params.id = report_id;
                     params.op = 'export';
-                    params.format = 'csv';
+                    // Respect complex_json flag from config: if set, ask Koha to return JSON
+                    var isComplex = (data && data.complex_json && data.complex_json === '1');
+                    params.format = isComplex ? 'json' : 'csv';
                     params._ = new Date().getTime();
                     var button = $('<button>', {
                         id: 'craftmypdf-button',
                         text: 'Generate PDF',
                         class: 'btn btn-primary',
                         style: 'margin: 10px;',
-                        click: function() {
-                            console.log('CraftMyPDF: Generate PDF button clicked for report ID ' + report_id);
-                            var jsonData = [];
-                            $.ajax({
-                                url: '/cgi-bin/koha/reports/guided_reports.pl',
-                                type: 'GET',
-                                data: params,
-                                dataType: 'text',
-                                cache: false,
-                                success: function(csv) {
-                                    console.log('CraftMyPDF: CSV data received for report ID ' + report_id + ' = ', csv.substring(0, 100) + '...');
-                                    if (!csv || csv.trim() === '') {
-                                        console.error('CraftMyPDF: No CSV data received for report ID ' + report_id);
-                                        alert('No report data found');
-                                        return;
-                                    }
-                                    jsonData = csvToJson(csv, report_id);
-                                    if (jsonData.length === 0) {
-                                        console.warn('CraftMyPDF: CSV parsing failed, trying table data for report ID ' + report_id);
-                                        jsonData = tableToJson(report_id);
-                                    }
-                                    console.log('CraftMyPDF: JSON data for report ID ' + report_id + ' = ', jsonData);
-                                    if (jsonData.length === 0) {
-                                        console.error('CraftMyPDF: No valid JSON data converted for report ID ' + report_id);
-                                        alert('Unable to parse report data due to formatting issues.');
-                                        return;
-                                    }
-                                    var payload = {
-                                        template_id: data.template_id,
-                                        export_type: 'json',
-                                            // expiration intentionally removed from payload; server controls PDF expiry
-                                        output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
-                                        data: { items: jsonData }
-                                    };
-                                    console.log('CraftMyPDF: JSON payload sent to CraftMyPDF API for report ID ' + report_id + ' = ', payload);
-                                    $.ajax({
-                                        url: 'https://api.craftmypdf.com/v1/create',
-                                        type: 'POST',
-                                        headers: {
-                                            'X-API-KEY': data.api_key,
-                                            'Content-Type': 'application/json'
-                                        },
-                                        contentType: 'application/json',
-                                        data: JSON.stringify(payload),
-                                        success: function(response) {
+                            click: function() {
+                            console.log('CraftMyPDF: Generate PDF button clicked for report ID ' + report_id + ', complex_json=' + isComplex);
+                            // If complex JSON is enabled for this report, request JSON output
+                            if (isComplex) {
+                                $.ajax({
+                                    url: '/cgi-bin/koha/reports/guided_reports.pl',
+                                    type: 'GET',
+                                    data: params,
+                                    dataType: 'json',
+                                    cache: false,
+                                    success: function(jsonBody) {
+                                        console.log('CraftMyPDF: JSON body received for report ID ' + report_id + ' = ', jsonBody);
+                                        if (!jsonBody) {
+                                            console.error('CraftMyPDF: No JSON data received for report ID ' + report_id);
+                                            alert('No report data found');
+                                            return;
+                                        }
+                                        // When complex JSON is used, send the body unchanged to CraftMyPDF API
+                                        var payload = {
+                                            template_id: data.template_id,
+                                            export_type: 'json',
+                                            output_file: 'report_' + report_id + '_' + new Date().toISOString().replace(/[:.]/g, '') + '.pdf',
+                                            data: jsonBody
+                                        };
+                                        console.log('CraftMyPDF: JSON payload (complex) sent to CraftMyPDF API for report ID ' + report_id + ' = ', payload);
+                                        $.ajax({
+                                            url: 'https://api.craftmypdf.com/v1/create',
+                                            type: 'POST',
+                                            headers: {
+                                                'X-API-KEY': data.api_key,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            contentType: 'application/json',
+                                            data: JSON.stringify(payload),
+                                            success: function(response) {
                                             console.log('CraftMyPDF: PDF generated for report ID ' + report_id + ': ', response);
                                             if (response.file) {
                                                 // Prevent duplicate download links: if a previous download anchor
