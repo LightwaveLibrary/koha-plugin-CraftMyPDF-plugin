@@ -58,18 +58,44 @@ sub configure {
         };
 
         my @configs;
+        # Try to select including complex_json. If the column doesn't exist (older installs),
+        # attempt to add it and fall back to selecting without it, defaulting to '0'.
+        my $select_ok = 0;
         eval {
             my $sth = $dbh->prepare("SELECT id, report_id, webhook, api_key, template_id, COALESCE(complex_json, '0') AS complex_json FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
             $sth->execute();
             while (my $row = $sth->fetchrow_hashref) {
                 push @configs, $row;
             }
+            $select_ok = 1;
         };
-        if ($@) {
-            warn "CraftMyPDF: Database error in configure: $@";
-            print $cgi->header(-status => 500);
-            print "Internal Server Error: Database query failed";
-            return;
+        if (!$select_ok) {
+            warn "CraftMyPDF: SELECT with complex_json failed: $@";
+            # Try to add the column (non-fatal if it fails)
+            eval {
+                $dbh->do("ALTER TABLE koha_plugin_com_lightwavelibrary_craftmypdf_configs ADD COLUMN complex_json VARCHAR(1) DEFAULT '0' AFTER template_id");
+                warn "CraftMyPDF: Added missing complex_json column to configs table";
+            };
+            if ($@) {
+                warn "CraftMyPDF: Could not add complex_json column (continuing): $@";
+            }
+
+            # Fallback: select without complex_json and set default
+            eval {
+                my $sth2 = $dbh->prepare("SELECT id, report_id, webhook, api_key, template_id FROM koha_plugin_com_lightwavelibrary_craftmypdf_configs");
+                $sth2->execute();
+                while (my $row = $sth2->fetchrow_hashref) {
+                    $row->{complex_json} = '0';
+                    push @configs, $row;
+                }
+                $select_ok = 1;
+            };
+            if (!$select_ok) {
+                warn "CraftMyPDF: Database error in configure (fallback select failed): $@";
+                print $cgi->header(-status => 500);
+                print "Internal Server Error: Database query failed";
+                return;
+            }
         }
 
         $template->param(
