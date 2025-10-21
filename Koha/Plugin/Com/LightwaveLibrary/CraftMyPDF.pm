@@ -189,6 +189,102 @@ sub fetch_templates {
     }
 }
 
+sub create_editor_session {
+    my ( $self ) = @_;
+    my $cgi = $self->{'cgi'} || CGI->new;
+    my $api_key = $cgi->param('api_key') || $self->retrieve_data('api_key') || '';
+    unless ($api_key) {
+        warn "CraftMyPDF: create_editor_session failed - no API key provided";
+        return $self->output_json(encode_json({ error => "No API key provided" }), 400);
+    }
+
+    my $payload = $cgi->param('payload') || '';
+    unless ($payload) {
+        warn "CraftMyPDF: create_editor_session failed - no payload provided";
+        return $self->output_json(encode_json({ error => "No payload provided" }), 400);
+    }
+
+    # Decode payload to validate JSON
+    my $decoded_payload;
+    eval {
+        $decoded_payload = decode_json($payload);
+    };
+    if ($@) {
+        warn "CraftMyPDF: Invalid JSON payload: $@";
+        return $self->output_json(encode_json({ error => "Invalid JSON payload" }), 400);
+    }
+
+    my $ua = LWP::UserAgent->new;
+    $ua->timeout(30); # Set 30 second timeout
+    my $url = 'https://api.craftmypdf.com/v1/create-editor-session';
+    
+    warn "CraftMyPDF: Sending request to $url with payload: $payload";
+    
+    my $response = $ua->post(
+        $url,
+        'Content-Type' => 'application/json',
+        'X-API-KEY'    => $api_key,
+        Content        => $payload,
+    );
+    
+    warn "CraftMyPDF: Raw response: " . $response->status_line . "\n" . $response->decoded_content;
+
+    if ($response->is_success) {
+        my $content = $response->decoded_content || '';
+        my $data = {};
+        eval { $data = decode_json($content) };
+        if ($@) {
+            warn "CraftMyPDF: create_editor_session returned non-json: $content";
+            # Return raw content in a JSON object to the frontend
+            return $self->output_json(encode_json({ success => 1, raw => $content }));
+        }
+        return $self->output_json(encode_json($data));
+    } else {
+        warn "CraftMyPDF: create_editor_session failed: " . $response->status_line . " - " . $response->decoded_content;
+        return $self->output_json(encode_json({ error => "Failed to create editor session: " . $response->status_line, body => $response->decoded_content }), 500);
+    }
+}
+
+sub deactivate_editor_session {
+    my ( $self ) = @_;
+    my $cgi = $self->{'cgi'} || CGI->new;
+    my $api_key = $cgi->param('api_key') || $self->retrieve_data('api_key') || '';
+    unless ($api_key) {
+        warn "CraftMyPDF: deactivate_editor_session failed - no API key provided";
+        return $self->output_json(encode_json({ error => "No API key provided" }), 400);
+    }
+
+    my $token_uuid = $cgi->param('token_uuid') || '';
+    unless ($token_uuid) {
+        warn "CraftMyPDF: deactivate_editor_session failed - no token_uuid provided";
+        return $self->output_json(encode_json({ error => "No token_uuid provided" }), 400);
+    }
+
+    my $ua = LWP::UserAgent->new;
+    my $url = 'https://api.craftmypdf.com/v1/deactivate-editor-session';
+    my $post_body = encode_json({ token_uuid => $token_uuid });
+    my $response = $ua->post(
+        $url,
+        'Content-Type' => 'application/json',
+        'X-API-KEY'    => $api_key,
+        Content        => $post_body,
+    );
+
+    if ($response->is_success) {
+        my $content = $response->decoded_content || '';
+        my $data = {};
+        eval { $data = decode_json($content) };
+        if ($@) {
+            warn "CraftMyPDF: deactivate_editor_session returned non-json: $content";
+            return $self->output_json(encode_json({ success => 1, raw => $content }));
+        }
+        return $self->output_json(encode_json($data));
+    } else {
+        warn "CraftMyPDF: deactivate_editor_session failed: " . $response->status_line . " - " . $response->decoded_content;
+        return $self->output_json(encode_json({ error => "Failed to deactivate editor session: " . $response->status_line, body => $response->decoded_content }), 500);
+    }
+}
+
 sub intranet_js {
     my ( $self ) = @_;
     return <<'END_JS';

@@ -348,6 +348,259 @@ document.querySelector('form').addEventListener('submit', function(e) {
         console.error('CraftMyPDF: Failed to sync complex_json values before submit', err);
     }
 });
+
+// CraftMyPDF Editor activation/deactivation handlers
+function findRowElements(btn) {
+    var dataRow = btn.closest('tr');
+    var iframeRow = dataRow.nextElementSibling && dataRow.nextElementSibling.classList.contains('editor-iframe-row') ? dataRow.nextElementSibling : null;
+    var iframe = iframeRow ? iframeRow.querySelector('.editor-iframe') : null;
+    var activateBtn = dataRow.querySelector('.activate-editor-btn');
+    var deactivateBtn = dataRow.querySelector('.deactivate-editor-btn');
+    var select = dataRow.querySelector('select[name="template_id[]"]');
+    return { dataRow, iframeRow, iframe, activateBtn, deactivateBtn, select };
+}
+
+function showIframeRow(iframeRow) {
+    if (!iframeRow) return;
+    var container = iframeRow.querySelector('.editor-iframe-container');
+    if (container) container.style.display = 'block';
+    iframeRow.style.display = '';
+}
+
+function hideIframeRow(iframeRow) {
+    if (!iframeRow) return;
+    var container = iframeRow.querySelector('.editor-iframe-container');
+    if (container) container.style.display = 'none';
+    iframeRow.style.display = 'none';
+}
+
+function activateEditor(button) {
+    var elems = findRowElements(button);
+    if (!elems.select || !elems.select.value) {
+        alert('Please select a template ID before activating the editor.');
+        return;
+    }
+    var apiKey = document.getElementById('api_key').value.trim();
+    if (!apiKey) {
+        alert('Please enter your CraftMyPDF API key in the settings above.');
+        return;
+    }
+
+    // Disable activate while working
+    elems.activateBtn.disabled = true;
+    elems.activateBtn.textContent = 'Activating...';
+
+    var payload = {
+        template_id: elems.select.value,
+        expiration: 1440,
+        canSave: true,
+        canCreatePDF: true,
+        canViewSettings: true,
+        canPreview: true,
+        canEditJSON: true,
+        canShowHeader: true,
+        backURL: window.location.href
+    };
+
+    console.log('CraftMyPDF: Creating editor session for template', elems.select.value);
+
+    console.log('CraftMyPDF: Sending create session request with payload:', payload);
+    $.ajax({
+        url: '/cgi-bin/koha/plugins/run.pl',
+        type: 'POST',
+        data: {
+            class: 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
+            method: 'create_editor_session',
+            api_key: apiKey,
+            payload: JSON.stringify(payload),
+            csrf_token: getCsrfToken()
+        },
+        dataType: 'json',
+        success: function(data) {
+            console.log('CraftMyPDF: create session response', data);
+            if (!data || !data.url || !data.token_uuid) {
+                alert('Unexpected response from server creating editor session.');
+                elems.activateBtn.disabled = false;
+                elems.activateBtn.textContent = 'Activate PDF Editor';
+                return;
+            }
+
+            // Store token on the dataRow for later deactivation
+            elems.dataRow.dataset.tokenUuid = data.token_uuid;
+
+            // Show iframe and set src to the provided URL
+            if (elems.iframe) {
+                elems.iframe.src = data.url;
+                showIframeRow(elems.iframeRow);
+                elems.iframeRow.querySelector('.editor-iframe-container').style.display = 'block';
+            }
+
+            elems.deactivateBtn.disabled = false;
+            elems.activateBtn.disabled = true;
+            elems.activateBtn.textContent = 'Activated';
+        },
+        error: function(xhr, status, err) {
+            console.error('CraftMyPDF: create session failed', {
+                status: status,
+                error: err,
+                responseText: xhr.responseText,
+                statusCode: xhr.status
+            });
+            var errorMsg = '';
+            try {
+                var response = JSON.parse(xhr.responseText);
+                errorMsg = response.error || response.body || err || status;
+            } catch(e) {
+                errorMsg = xhr.responseText || err || status;
+            }
+            alert('Failed to create editor session: ' + errorMsg);
+            elems.activateBtn.disabled = false;
+            elems.activateBtn.textContent = 'Activate PDF Editor';
+        }
+    });
+}
+
+function deactivateEditor(button) {
+    var elems = findRowElements(button);
+    var token = elems.dataRow ? elems.dataRow.dataset.tokenUuid : null;
+    var apiKey = document.getElementById('api_key').value.trim();
+    if (!token) {
+        alert('No active editor session found for this row.');
+        return;
+    }
+
+    elems.deactivateBtn.disabled = true;
+    elems.deactivateBtn.textContent = 'Deactivating...';
+
+    $.ajax({
+        url: '/cgi-bin/koha/plugins/run.pl',
+        type: 'POST',
+        data: {
+            class: 'Koha::Plugin::Com::LightwaveLibrary::CraftMyPDF',
+            method: 'deactivate_editor_session',
+            api_key: apiKey,
+            token_uuid: token,
+            csrf_token: getCsrfToken()
+        },
+        dataType: 'json',
+        success: function(data) {
+            console.log('CraftMyPDF: deactivate response', data);
+            // Clear token and hide iframe
+            delete elems.dataRow.dataset.tokenUuid;
+            if (elems.iframe) {
+                elems.iframe.src = 'about:blank';
+                hideIframeRow(elems.iframeRow);
+            }
+            elems.deactivateBtn.disabled = true;
+            elems.deactivateBtn.textContent = 'Deactivate PDF Editor';
+            elems.activateBtn.disabled = false;
+            elems.activateBtn.textContent = 'Activate PDF Editor';
+        },
+        error: function(xhr, status, err) {
+            console.error('CraftMyPDF: deactivate failed', status, err, xhr.responseText);
+            alert('Failed to deactivate editor session: ' + (err || status));
+            elems.deactivateBtn.disabled = false;
+            elems.deactivateBtn.textContent = 'Deactivate PDF Editor';
+        }
+    });
+}
+
+// Wire up existing rows' activate/deactivate buttons
+function bindEditorButtons(root) {
+    root = root || document;
+    root.querySelectorAll('.activate-editor-btn').forEach(function(b) {
+        if (b._bound) return; b._bound = true;
+        b.addEventListener('click', function() { activateEditor(b); });
+    });
+    root.querySelectorAll('.deactivate-editor-btn').forEach(function(b) {
+        if (b._bound) return; b._bound = true;
+        b.addEventListener('click', function() { deactivateEditor(b); });
+    });
+}
+
+// Update editor button enabled/disabled state based on presence of API key and template selection
+function updateEditorButtonStateForRow(dataRow) {
+    if (!dataRow) return;
+    // skip iframe rows
+    if (dataRow.classList && dataRow.classList.contains('editor-iframe-row')) return;
+    var activateBtn = dataRow.querySelector('.activate-editor-btn');
+    var deactivateBtn = dataRow.querySelector('.deactivate-editor-btn');
+    var select = dataRow.querySelector('select[name="template_id[]"]');
+    var apiKey = document.getElementById('api_key') ? document.getElementById('api_key').value.trim() : '';
+
+    var hasApiKey = !!apiKey;
+    var hasTemplate = !!(select && select.value);
+
+    if (activateBtn) {
+        // only enable activate when api key exists and a template is selected
+        activateBtn.disabled = !(hasApiKey && hasTemplate);
+    }
+    if (deactivateBtn) {
+        // deactivate should be disabled if no api key or there's no active token
+        // but don't enable it automatically just because api key exists; existing flow sets it when activated
+        if (!hasApiKey) deactivateBtn.disabled = true;
+    }
+}
+
+function updateAllEditorButtonStates() {
+    var tbody = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
+    if (!tbody) return;
+    var rows = tbody.querySelectorAll('tr');
+    rows.forEach(function(r) {
+        updateEditorButtonStateForRow(r);
+    });
+}
+
+function bindTemplateSelectListeners(root) {
+    root = root || document;
+    root.querySelectorAll('select[name="template_id[]"]').forEach(function(s) {
+        if (s._tplBound) return; s._tplBound = true;
+        s.addEventListener('change', function() {
+            var row = s.closest('tr');
+            updateEditorButtonStateForRow(row);
+        });
+    });
+}
+
+// Ensure newly added rows (via addRow) have buttons wired and insert iframe row after them
+var origAddRow = window.addRow;
+window.addRow = function() {
+    origAddRow();
+    // find last two rows (data row and iframe row) and wire buttons
+    var tbody = document.getElementById('reportTable').getElementsByTagName('tbody')[0];
+    var rows = tbody.querySelectorAll('tr');
+    var lastDataRow = rows[rows.length - 1];
+    // Insert iframe row after lastDataRow
+    var iframeRow = document.createElement('tr');
+    iframeRow.className = 'editor-iframe-row';
+    iframeRow.style.display = 'none';
+    iframeRow.innerHTML = '<td colspan="4" style="padding:0;border-top:0;"><div class="editor-iframe-container" style="width:100%;height:600px;display:none;"><iframe class="editor-iframe" style="width:100%;height:100%;border:0;" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe></div></td>';
+    if (lastDataRow && lastDataRow.parentNode) {
+        lastDataRow.parentNode.insertBefore(iframeRow, lastDataRow.nextSibling);
+        bindEditorButtons(lastDataRow.parentNode);
+        bindTemplateSelectListeners(lastDataRow.parentNode);
+        // update button states for the newly added row
+        updateEditorButtonStateForRow(lastDataRow);
+    }
+    // Wire newly added fetch template button too
+    var fetchBtn = lastDataRow.querySelector('.fetch-templates-btn');
+    if (fetchBtn) bindFetchButton(fetchBtn);
+}
+
+// Bind on document ready
+$(document).ready(function() {
+    bindEditorButtons();
+    bindTemplateSelectListeners();
+    // ensure activate/deactivate buttons are disabled when no API key is present
+    var apiKeyInput = document.getElementById('api_key');
+    if (apiKeyInput) {
+        apiKeyInput.addEventListener('input', function() {
+            updateAllEditorButtonStates();
+        });
+    }
+    // initial state
+    updateAllEditorButtonStates();
+});
 </script>
 </body>
 </html>
