@@ -108,7 +108,20 @@
                                             <a href="#" class="complex-json-help" style="color:#007bff;margin-left:4px;">What's This?</a>
                                         </label>
                                     </td>
-                                    <td><button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button></td>
+                                    <td>
+                                        <div style="display:flex;gap:6px;align-items:center;">
+                                            <button type="button" class="btn btn-success activate-editor-btn">Activate PDF Editor</button>
+                                            <button type="button" class="btn btn-warning deactivate-editor-btn" disabled>Deactivate PDF Editor</button>
+                                            <button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="editor-iframe-row" style="display:none;">
+                                    <td colspan="4" style="padding:0;border-top:0;">
+                                        <div class="editor-iframe-container" style="width:100%;height:600px;display:none;">
+                                            <iframe class="editor-iframe" style="width:100%;height:100%;border:0;" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+                                        </div>
+                                    </td>
                                 </tr>
                             [% END %]
                         [% ELSE %]
