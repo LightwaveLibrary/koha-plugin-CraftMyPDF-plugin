@@ -191,57 +191,121 @@ sub fetch_templates {
 
 sub create_editor_session {
     my ( $self ) = @_;
+    # Top-level eval to catch any unexpected dies and return JSON instead of raw 500
     my $cgi = $self->{'cgi'} || CGI->new;
-    my $api_key = $cgi->param('api_key') || $self->retrieve_data('api_key') || '';
-    unless ($api_key) {
-        warn "CraftMyPDF: create_editor_session failed - no API key provided";
-        return $self->output_json(encode_json({ error => "No API key provided" }), 400);
-    }
+    
+    # Log detailed request information for platform debugging
+    my $user_agent = $cgi->user_agent() || '';
+    my $content_type = $cgi->content_type() || '';
+    my $request_method = $cgi->request_method() || '';
+    my $path_info = $cgi->path_info() || '';
+    warn sprintf("CraftMyPDF: Request details - UA: %s, Content-Type: %s, Method: %s, Path: %s",
+                $user_agent, $content_type, $request_method, $path_info);
 
-    my $payload = $cgi->param('payload') || '';
-    unless ($payload) {
-        warn "CraftMyPDF: create_editor_session failed - no payload provided";
-        return $self->output_json(encode_json({ error => "No payload provided" }), 400);
-    }
-
-    # Decode payload to validate JSON
-    my $decoded_payload;
     eval {
-        $decoded_payload = decode_json($payload);
-    };
-    if ($@) {
-        warn "CraftMyPDF: Invalid JSON payload: $@";
-        return $self->output_json(encode_json({ error => "Invalid JSON payload" }), 400);
-    }
-
-    my $ua = LWP::UserAgent->new;
-    $ua->timeout(30); # Set 30 second timeout
-    my $url = 'https://api.craftmypdf.com/v1/create-editor-session';
-    
-    warn "CraftMyPDF: Sending request to $url with payload: $payload";
-    
-    my $response = $ua->post(
-        $url,
-        'Content-Type' => 'application/json',
-        'X-API-KEY'    => $api_key,
-        Content        => $payload,
-    );
-    
-    warn "CraftMyPDF: Raw response: " . $response->status_line . "\n" . $response->decoded_content;
-
-    if ($response->is_success) {
-        my $content = $response->decoded_content || '';
-        my $data = {};
-        eval { $data = decode_json($content) };
-        if ($@) {
-            warn "CraftMyPDF: create_editor_session returned non-json: $content";
-            # Return raw content in a JSON object to the frontend
-            return $self->output_json(encode_json({ success => 1, raw => $content }));
+        # Log raw POST data for debugging
+        if (my $raw_post = $cgi->param('POSTDATA')) {
+            warn "CraftMyPDF: Raw POST data length: " . length($raw_post);
+            warn "CraftMyPDF: First 500 chars of POST data: " . substr($raw_post, 0, 500) if $raw_post;
         }
-        return $self->output_json(encode_json($data));
-    } else {
-        warn "CraftMyPDF: create_editor_session failed: " . $response->status_line . " - " . $response->decoded_content;
-        return $self->output_json(encode_json({ error => "Failed to create editor session: " . $response->status_line, body => $response->decoded_content }), 500);
+        
+        my $api_key = $cgi->param('api_key') || $self->retrieve_data('api_key') || '';
+        unless ($api_key) {
+            warn "CraftMyPDF: create_editor_session failed - no API key provided";
+            return $self->output_json(encode_json({ error => "No API key provided" }), 400);
+        }
+
+        my $payload = $cgi->param('payload') || '';
+        unless ($payload) {
+            warn "CraftMyPDF: create_editor_session failed - no payload provided";
+            return $self->output_json(encode_json({ error => "No payload provided" }), 400);
+        }
+
+        # Log payload characteristics for debugging
+        warn sprintf("CraftMyPDF: Payload details - Length: %d, First 100 chars: %s",
+                    length($payload), substr($payload, 0, 100));
+        
+        # Handle potential Windows-style line endings
+        $payload =~ s/\r\n/\n/g;
+        
+        # Ensure proper UTF-8 encoding
+        if ($payload !~ /^[\x00-\x7F]*$/) { # Contains non-ASCII
+            eval {
+                require Encode;
+                $payload = Encode::decode('UTF-8', $payload);
+            };
+            if ($@) {
+                warn "CraftMyPDF: UTF-8 decode failed: $@";
+                return $self->output_json(encode_json({ 
+                    error => "Invalid character encoding in payload",
+                    detail => "Payload contains non-ASCII characters that couldn't be decoded"
+                }), 400);
+            }
+        }
+
+        # Decode payload to validate JSON
+        my $decoded_payload;
+        eval {
+            $decoded_payload = decode_json($payload);
+        };
+        if ($@) {
+            warn "CraftMyPDF: Invalid JSON payload: $@";
+            return $self->output_json(encode_json({ error => "Invalid JSON payload" }), 400);
+        }
+
+        my $ua = LWP::UserAgent->new;
+        $ua->timeout(30); # Set 30 second timeout
+        my $url = 'https://api.craftmypdf.com/v1/create-editor-session';
+        
+        warn "CraftMyPDF: Sending request to $url with payload: $payload";
+
+        my $response;
+        eval {
+            $response = $ua->post(
+                $url,
+                'Content-Type' => 'application/json',
+                'X-API-KEY'    => $api_key,
+                Content        => $payload,
+            );
+        };
+
+        if ($@) {
+            warn "CraftMyPDF: HTTP request to CraftMyPDF API died: $@";
+            return $self->output_json(encode_json({ error => "Failed to contact CraftMyPDF API", detail => "HTTP request error" }), 500);
+        }
+
+        unless ($response) {
+            warn "CraftMyPDF: No response object returned from LWP::UserAgent->post";
+            return $self->output_json(encode_json({ error => "No response from CraftMyPDF API" }), 500);
+        }
+
+        my $status_line = eval { $response->status_line } || 'unknown status';
+        my $resp_content = eval { $response->decoded_content } || '';
+        warn "CraftMyPDF: Raw response: $status_line\n$resp_content";
+
+        if ($response->is_success) {
+            my $content = $resp_content || '';
+            my $data = {};
+            eval { $data = decode_json($content) };
+            if ($@) {
+                warn "CraftMyPDF: create_editor_session returned non-json: $content";
+                # Return raw content in a JSON object to the frontend
+                return $self->output_json(encode_json({ success => 1, raw => $content }));
+            }
+            return $self->output_json(encode_json($data));
+        } else {
+            warn "CraftMyPDF: create_editor_session failed: $status_line - $resp_content";
+            return $self->output_json(encode_json({ error => "Failed to create editor session: $status_line", body => $resp_content }), 500);
+        }
+    };
+
+    if ($@) {
+        # Catch-all for unexpected exceptions; truncate detail to avoid leaking secrets
+        my $err = $@;
+        $err =~ s/\s+/ /g;
+        $err = substr($err,0,1000) if length($err) > 1000;
+        warn "CraftMyPDF: create_editor_session panicked: $err";
+        return $self->output_json(encode_json({ error => "Internal server error", detail => $err }), 500);
     }
 }
 
