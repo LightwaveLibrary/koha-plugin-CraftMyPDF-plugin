@@ -13,7 +13,7 @@ Yes.  You can get started on free plans with the above mentioned sites. Of cours
 # Step 1 
 Create a free account on https://craftmypdf.com
 
-[Watch the quick overview of how it works video](https://lightwavelibrary.com/videos/HowToKohaPDF.mp4)
+[Watch the quick overview of how it works video](https://youtu.be/GPWESkn5s1E)
 
 # Step 2 
 Install this Koha plugin from the Releases section here in Github.
